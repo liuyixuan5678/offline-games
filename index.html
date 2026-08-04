@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Offline Games</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+    min-height:100vh;
+    background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+    font-family:'Segoe UI',Arial,sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:40px 20px;
+    color:#fff;
+}
+h1{
+    font-size:2.5rem;
+    margin-bottom:8px;
+    text-align:center;
+    text-shadow:0 2px 8px rgba(0,0,0,.3);
+}
+p.sub{
+    opacity:.85;
+    margin-bottom:36px;
+    text-align:center;
+}
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:20px;
+    width:100%;
+    max-width:900px;
+}
+a.card{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:32px 20px;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:14px;
+    text-decoration:none;
+    color:#fff;
+    backdrop-filter:blur(6px);
+    transition:transform .15s ease,background .15s ease;
+}
+a.card:hover{
+    transform:translateY(-4px);
+    background:rgba(255,255,255,.22);
+}
+.icon{font-size:3rem;margin-bottom:12px}
+.name{font-size:1.25rem;font-weight:bold}
+</style>
+</head>
+<body>
+<h1>Offline Games</h1>
+<p class="sub">Pick a game to play</p>
+<div class="grid">
+    <a class="card" href="driving-game.html">
+        <span class="icon">🏎️</span>
+        <span class="name">Driving Game</span>
+    </a>
+    <a class="card" href="snake.html">
+        <span class="icon">🐍</span>
+        <span class="name">Snake</span>
+    </a>
+    <a class="card" href="tetris.html">
+        <span class="icon">🧱</span>
+        <span class="name">Tetris</span>
+    </a>
+    <a class="card" href="spades.html">
+        <span class="icon">♠️</span>
+        <span class="name">Spades</span>
+    </a>
+    <a class="card" href="hongshi.html">
+        <span class="icon">🃏</span>
+        <span class="name">红十</span>
+    </a>
+</div>
+</body>
+</html>
