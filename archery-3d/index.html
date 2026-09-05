@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARCHERION — First Person Archery</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --ink: #0a0705;
+    --parchment: #e8dcc8;
+    --gold: #c9a84c;
+    --ember: #d4541a;
+    --blood: #8b1a1a;
+    --mist: rgba(200,190,170,0.15);
+  }
+
+  body {
+    background: var(--ink);
+    overflow: hidden;
+    font-family: 'Crimson Pro', serif;
+    color: var(--parchment);
+    cursor: none;
+  }
+
+  #canvas-container {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+  }
+
+  #game-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* HUD */
+  #hud {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  /* Score Panel */
+  #score-panel {
+    position: absolute;
+    top: 28px;
+    left: 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  #score-label {
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--gold);
+    opacity: 0.7;
+    text-transform: uppercase;
+  }
+
+  #score-value {
+    font-family: 'Cinzel', serif;
+    font-size: 42px;
+    font-weight: 900;
+    color: var(--parchment);
+    line-height: 1;
+    text-shadow: 0 0 30px rgba(201,168,76,0.5);
+    transition: transform 0.1s;
+  }
+
+  #score-value.pop {
+    transform: scale(1.15);
+    color: var(--gold);
+  }
+
+  /* Arrows remaining */
+  #arrows-panel {
+    position: absolute;
+    top: 28px;
+    right: 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  #arrows-label {
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--gold);
+    opacity: 0.7;
+    text-transform: uppercase;
+  }
+
+  #arrows-icons {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .arrow-icon {
+    width: 3px;
+    height: 28px;
+    background: linear-gradient(to bottom, var(--parchment), var(--gold));
+    border-radius: 2px;
+    transition: opacity 0.3s, transform 0.3s;
+    position: relative;
+  }
+
+  .arrow-icon::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: -3px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 7px solid var(--gold);
+  }
+
+  .arrow-icon.used {
+    opacity: 0.2;
+    transform: translateY(5px);
+  }
+
+  /* Crosshair */
+  #crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    transition: transform 0.15s ease, opacity 0.2s;
+  }
+
+  #crosshair svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0 6px rgba(201,168,76,0.8));
+  }
+
+  #crosshair.charging {
+    transform: translate(-50%, -50%) scale(0.7);
+  }
+
+  #crosshair.release {
+    transform: translate(-50%, -50%) scale(1.3);
+  }
+
+  /* Power meter */
+  #power-meter {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  #power-meter.visible { opacity: 1; }
+
+  #power-label {
+    font-family: 'Cinzel', serif;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+
+  #power-track {
+    width: 160px;
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  #power-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--gold), var(--ember));
+    border-radius: 2px;
+    transition: width 0.05s linear, background 0.3s;
+  }
+
+  /* Move hint */
+  #move-hint {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--parchment);
+    opacity: 0.35;
+    text-align: center;
+  }
+
+  /* Hit feedback */
+  #hit-flash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(201,168,76,0.35) 0%, transparent 70%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.05s;
+  }
+
+  #hit-flash.active { opacity: 1; }
+
+  /* Hit label */
+  #hit-label {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    font-family: 'Cinzel', serif;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    color: var(--gold);
+    text-shadow: 0 0 40px var(--gold);
+    opacity: 0;
+    transition: opacity 0.15s, transform 0.15s;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  #hit-label.active {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  /* Decorative corners */
+  .corner {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+  }
+  .corner svg { width: 100%; height: 100%; opacity: 0.4; }
+  .corner-tl { top: 12px; left: 12px; }
+  .corner-tr { top: 12px; right: 12px; transform: scaleX(-1); }
+  .corner-bl { bottom: 12px; left: 12px; transform: scaleY(-1); }
+  .corner-br { bottom: 12px; right: 12px; transform: scale(-1); }
+
+
+  /* Streak counter */
+  #streak {
+    position: absolute;
+    top: 100px;
+    left: 36px;
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--ember);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #streak.visible { opacity: 1; }
+
+  /* Splash screen */
+  #splash {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    cursor: pointer;
+  }
+
+  #splash-title {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(48px, 8vw, 96px);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    color: var(--gold);
+    text-shadow: 0 0 80px rgba(201,168,76,0.4), 0 0 160px rgba(201,168,76,0.1);
+    animation: titlePulse 3s ease-in-out infinite;
+  }
+
+  @keyframes titlePulse {
+    0%, 100% { text-shadow: 0 0 80px rgba(201,168,76,0.4), 0 0 160px rgba(201,168,76,0.1); }
+    50% { text-shadow: 0 0 120px rgba(201,168,76,0.7), 0 0 240px rgba(201,168,76,0.2); }
+  }
+
+  #splash-sub {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--parchment);
+    opacity: 0.6;
+    letter-spacing: 0.1em;
+  }
+
+  #splash-divider {
+    width: 200px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0.5;
+  }
+
+  #splash-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Cinzel', serif;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    color: var(--parchment);
+    opacity: 0.6;
+  }
+
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--gold);
+    background: rgba(201,168,76,0.08);
+  }
+
+  #splash-start {
+    margin-top: 16px;
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    letter-spacing: 0.4em;
+    color: var(--gold);
+    animation: blink 1.5s ease-in-out infinite;
+    text-transform: uppercase;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* Game over */
+  #game-over {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(10,7,5,0.9);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    backdrop-filter: blur(4px);
+  }
+
+  #game-over.visible { display: flex; }
+
+  #game-over-title {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    color: var(--blood);
+    text-shadow: 0 0 60px rgba(139,26,26,0.6);
+  }
+
+  #final-score {
+    font-family: 'Crimson Pro', serif;
+    font-size: 18px;
+    color: var(--parchment);
+    opacity: 0.8;
+    letter-spacing: 0.1em;
+  }
+
+  #restart-btn {
+    margin-top: 16px;
+    padding: 12px 40px;
+    border: 1px solid var(--gold);
+    background: transparent;
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  #restart-btn:hover {
+    background: var(--gold);
+    color: var(--ink);
+  }
+
+  /* Shop panel */
+  #shop-panel {
+    position: absolute;
+    top: 90px;
+    right: 36px;
+    display: none;
+    pointer-events: auto;
+  }
+
+  #buy-arrow-btn {
+    padding: 7px 14px;
+    border: 1px solid var(--gold);
+    background: rgba(201,168,76,0.08);
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.2s, color 0.2s, opacity 0.2s;
+    white-space: nowrap;
+  }
+
+  #buy-arrow-btn:hover:not(:disabled) {
+    background: var(--gold);
+    color: var(--ink);
+  }
+
+  #buy-arrow-btn:disabled {
+    cursor: default;
+  }
+
+  #arrow-cost {
+    opacity: 0.65;
+    font-size: 9px;
+    margin-left: 4px;
+  }
+
+  #buy-crossbow-btn, #buy-gun-btn, #buy-pistol-btn, #buy-sniper-btn {
+    padding: 7px 14px;
+    border: 1px solid var(--gold);
+    background: rgba(201,168,76,0.08);
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.2s, color 0.2s, opacity 0.2s;
+    white-space: nowrap;
+    width: 100%;
+    text-align: left;
+  }
+
+  #buy-crossbow-btn:hover:not(:disabled), #buy-gun-btn:hover:not(:disabled),
+  #buy-pistol-btn:hover:not(:disabled), #buy-sniper-btn:hover:not(:disabled) {
+    background: var(--gold);
+    color: var(--ink);
+  }
+
+  #buy-crossbow-btn:disabled, #buy-gun-btn:disabled,
+  #buy-pistol-btn:disabled, #buy-sniper-btn:disabled {
+    cursor: default;
+  }
+
+  .weapon-cost {
+    opacity: 0.65;
+    font-size: 9px;
+    margin-left: 4px;
+  }
+
+  .weapon-equipped {
+    border-color: var(--ember) !important;
+    color: var(--ember) !important;
+  }
+
+  /* Settings button & panel */
+  #settings-btn {
+    position: absolute;
+    top: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Cinzel', serif;
+    font-size: 18px;
+    color: var(--gold);
+    opacity: 0.6;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: opacity 0.2s;
+    user-select: none;
+  }
+  #settings-btn:hover { opacity: 1; }
+
+  #settings-panel {
+    position: absolute;
+    top: 58px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    background: rgba(10,7,5,0.92);
+    border: 1px solid var(--gold);
+    padding: 14px 20px;
+    pointer-events: auto;
+    min-width: 180px;
+  }
+
+  #settings-title {
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+    opacity: 0.7;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--parchment);
+  }
+
+  #toggle-trajectory {
+    padding: 4px 10px;
+    border: 1px solid var(--gold);
+    background: rgba(201,168,76,0.08);
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.2s, color 0.2s;
+  }
+  #toggle-trajectory:hover {
+    background: var(--gold);
+    color: var(--ink);
+  }
+  #toggle-trajectory.off {
+    opacity: 0.45;
+    border-color: var(--parchment);
+    color: var(--parchment);
+  }
+
+  /* Sniper scope overlay */
+  #sniper-scope {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    pointer-events: none;
+  }
+  #sniper-scope.active { display: block; }
+  #sniper-scope svg { width: 100%; height: 100%; }
+
+  /* Custom cursor */
+  #custom-cursor {
+    position: fixed;
+    width: 8px;
+    height: 8px;
+    background: var(--gold);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 999;
+    transform: translate(-50%, -50%);
+    mix-blend-mode: screen;
+    transition: transform 0.1s;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <canvas id="game-canvas"></canvas>
+</div>
+
+<div id="hud">
+  <!-- Corners -->
+  <div class="corner corner-tl">
+    <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5 55 L5 5 L55 5" stroke="#c9a84c" stroke-width="1.5"/>
+      <path d="M5 35 L5 5 L35 5" stroke="#c9a84c" stroke-width="0.5" opacity="0.5"/>
+    </svg>
+  </div>
+  <div class="corner corner-tr">
+    <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5 55 L5 5 L55 5" stroke="#c9a84c" stroke-width="1.5"/>
+      <path d="M5 35 L5 5 L35 5" stroke="#c9a84c" stroke-width="0.5" opacity="0.5"/>
+    </svg>
+  </div>
+  <div class="corner corner-bl">
+    <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5 55 L5 5 L55 5" stroke="#c9a84c" stroke-width="1.5"/>
+      <path d="M5 35 L5 5 L35 5" stroke="#c9a84c" stroke-width="0.5" opacity="0.5"/>
+    </svg>
+  </div>
+  <div class="corner corner-br">
+    <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5 55 L5 5 L55 5" stroke="#c9a84c" stroke-width="1.5"/>
+      <path d="M5 35 L5 5 L35 5" stroke="#c9a84c" stroke-width="0.5" opacity="0.5"/>
+    </svg>
+  </div>
+
+  <div id="score-panel">
+    <div id="score-label">Score</div>
+    <div id="score-value">0</div>
+  </div>
+
+  <div id="streak"></div>
+
+  <div id="arrows-panel">
+    <div id="arrows-label">Arrows</div>
+    <div id="arrows-icons">
+      <div class="arrow-icon" id="a1"></div>
+      <div class="arrow-icon" id="a2"></div>
+      <div class="arrow-icon" id="a3"></div>
+      <div class="arrow-icon" id="a4"></div>
+      <div class="arrow-icon" id="a5"></div>
+      <div class="arrow-icon" id="a6"></div>
+      <div class="arrow-icon" id="a7"></div>
+      <div class="arrow-icon" id="a8"></div>
+      <div class="arrow-icon" id="a9"></div>
+      <div class="arrow-icon" id="a10"></div>
+    </div>
+  </div>
+
+  <div id="shop-panel">
+    <button id="buy-arrow-btn">+ Arrow <span id="arrow-cost">25 pts</span></button>
+    <button id="buy-crossbow-btn">Crossbow <span class="weapon-cost">500 pts</span></button>
+    <button id="buy-pistol-btn">Pistol <span class="weapon-cost">750 pts</span></button>
+    <button id="buy-gun-btn">Minigun <span class="weapon-cost">1000 pts</span></button>
+    <button id="buy-sniper-btn">Sniper <span class="weapon-cost">1000 pts</span></button>
+  </div>
+
+  <div id="crosshair">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="12" stroke="#c9a84c" stroke-width="0.8" opacity="0.6"/>
+      <circle cx="20" cy="20" r="2" fill="#c9a84c"/>
+      <line x1="20" y1="2" x2="20" y2="10" stroke="#c9a84c" stroke-width="1.2"/>
+      <line x1="20" y1="30" x2="20" y2="38" stroke="#c9a84c" stroke-width="1.2"/>
+      <line x1="2" y1="20" x2="10" y2="20" stroke="#c9a84c" stroke-width="1.2"/>
+      <line x1="30" y1="20" x2="38" y2="20" stroke="#c9a84c" stroke-width="1.2"/>
+    </svg>
+  </div>
+
+  <div id="power-meter">
+    <div id="power-label">Draw</div>
+    <div id="power-track"><div id="power-fill"></div></div>
+  </div>
+
+  <div id="move-hint">A / D — MOVE · HOLD SPACE — DRAW · RELEASE — FIRE</div>
+
+  <div id="hit-flash"></div>
+  <div id="hit-label">BULL'S EYE!</div>
+
+  <div id="settings-btn">⚙</div>
+  <div id="settings-panel">
+    <div id="settings-title">Settings</div>
+    <div class="settings-row">
+      <span>Trajectory</span>
+      <button id="toggle-trajectory">ON</button>
+    </div>
+  </div>
+</div>
+
+<!-- Splash -->
+<div id="splash">
+  <div id="splash-title">ARCHERION</div>
+  <div id="splash-sub">A tale of iron and distance</div>
+  <div id="splash-divider"></div>
+  <div id="splash-controls">
+    <div class="control-row"><span class="key">A</span><span class="key">D</span><span>Move left / right</span></div>
+    <div class="control-row"><span class="key">⎵</span><span>Hold to draw bow</span></div>
+    <div class="control-row"><span>Release space</span><span>to fire</span></div>
+    <div class="control-row"><span class="key">🖱</span><span>Aim with mouse</span></div>
+  </div>
+  <div id="splash-start">Click to Begin</div>
+</div>
+
+<!-- Game Over -->
+<div id="game-over">
+  <div id="game-over-title">Quiver Empty</div>
+  <div id="final-score"></div>
+  <button id="restart-btn">Draw Again</button>
+</div>
+
+<div id="custom-cursor"></div>
+
+<!-- Sniper scope overlay -->
+<div id="sniper-scope">
+  <svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+    <!-- Black mask with circular hole -->
+    <defs>
+      <mask id="scope-mask">
+        <rect width="800" height="600" fill="white"/>
+        <circle cx="400" cy="300" r="180" fill="black"/>
+      </mask>
+    </defs>
+    <rect width="800" height="600" fill="rgba(0,0,0,0.88)" mask="url(#scope-mask)"/>
+    <!-- Crosshair lines -->
+    <line x1="220" y1="300" x2="580" y2="300" stroke="#c9a84c" stroke-width="1" opacity="0.8"/>
+    <line x1="400" y1="120" x2="400" y2="480" stroke="#c9a84c" stroke-width="1" opacity="0.8"/>
+    <!-- Range marks -->
+    <line x1="370" y1="330" x2="430" y2="330" stroke="#c9a84c" stroke-width="0.8" opacity="0.6"/>
+    <line x1="370" y1="360" x2="430" y2="360" stroke="#c9a84c" stroke-width="0.8" opacity="0.6"/>
+    <line x1="370" y1="390" x2="430" y2="390" stroke="#c9a84c" stroke-width="0.8" opacity="0.6"/>
+    <!-- Scope circle border -->
+    <circle cx="400" cy="300" r="180" fill="none" stroke="#c9a84c" stroke-width="1.5" opacity="0.5"/>
+    <circle cx="400" cy="300" r="4" fill="#c9a84c" opacity="0.9"/>
+  </svg>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+const state = {
+  score: 0,
+  arrows: 10,
+  streak: 0,
+  charging: false,
+  power: 0,
+  fired: false,
+  gameActive: false,
+  mouseX: 0,
+  mouseY: 0,
+  keys: { a: false, d: false, space: false },
+  weapon: 'bow',
+  weapons: { bow: true, crossbow: false, gun: false, pistol: false, minigun: false, sniper: false },
+  sniperZoomed: false,
+};
+
+let playerX = 0;
+let activeArrow = null;
+let endGameTimer = null;
+let minigunInterval = null;
+
+const settings = { trajectory: true };
+
+// ─── Three.js setup ──────────────────────────────────────────────────────────
+const canvas = document.getElementById('game-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2a1f14);
+scene.fog = new THREE.Fog(0x2a1f14, 35, 60);
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.01, 500);
+camera.position.set(0, 1.65, 0);
+camera.rotation.order = 'YXZ';
+
+// ─── Lighting ─────────────────────────────────────────────────────────────────
+const ambient = new THREE.AmbientLight(0xffffff, 3.0);
+scene.add(ambient);
+
+// Main ceiling fill light (warm indoor)
+const ceilingLight = new THREE.DirectionalLight(0xffffff, 3.0);
+ceilingLight.position.set(0, 10, -10);
+ceilingLight.castShadow = true;
+ceilingLight.shadow.mapSize.set(2048, 2048);
+ceilingLight.shadow.camera.near = 0.5;
+ceilingLight.shadow.camera.far = 60;
+ceilingLight.shadow.camera.left = -20;
+ceilingLight.shadow.camera.right = 20;
+ceilingLight.shadow.camera.top = 20;
+ceilingLight.shadow.camera.bottom = -20;
+ceilingLight.shadow.bias = -0.002;
+scene.add(ceilingLight);
+
+// Front fill light — illuminates targets from player's side
+const frontFill = new THREE.DirectionalLight(0xffffff, 2.0);
+frontFill.position.set(0, 5, 5);
+scene.add(frontFill);
+
+// Lantern point lights along the range
+const lanternPositions = [
+  [-5, 3.8, -5], [5, 3.8, -5],
+  [-5, 3.8, -14], [5, 3.8, -14],
+  [-5, 3.8, -23], [5, 3.8, -23],
+];
+lanternPositions.forEach(([x, y, z]) => {
+  const pl = new THREE.PointLight(0xffbb55, 15.0, 20);
+  pl.position.set(x, y, z);
+  scene.add(pl);
+});
+
+// ─── Trajectory preview line ─────────────────────────────────────────────────
+const trajectoryGeo = new THREE.BufferGeometry();
+const trajectoryMat = new THREE.LineDashedMaterial({
+  color: 0xc9a84c,
+  dashSize: 0.18,
+  gapSize: 0.12,
+  opacity: 0.55,
+  transparent: true,
+});
+const trajectoryLine = new THREE.Line(trajectoryGeo, trajectoryMat);
+trajectoryLine.visible = false;
+scene.add(trajectoryLine);
+
+// ─── Indoor Archery Range ─────────────────────────────────────────────────────
+
+const ROOM_W = 12;   // half-width each side = 6m
+const ROOM_H = 5;
+const ROOM_L = 32;   // length of range
+
+const woodMat   = new THREE.MeshLambertMaterial({ color: 0xb07840 });
+const stoneMat  = new THREE.MeshLambertMaterial({ color: 0x9a8a78 });
+const stoneLight= new THREE.MeshLambertMaterial({ color: 0xaa9a88 });
+const ceilMat   = new THREE.MeshLambertMaterial({ color: 0x7a6248 });
+
+// Floor
+const floorGeo = new THREE.PlaneGeometry(ROOM_W, ROOM_L, 12, 32);
+const floorMat = new THREE.MeshLambertMaterial({ color: 0xaa7040 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.set(0, 0, -ROOM_L / 2 + 2);
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Add plank lines as thin dark strips
+for (let i = -5; i <= 5; i++) {
+  const plank = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.06, ROOM_L),
+    new THREE.MeshLambertMaterial({ color: 0x2a1a08 })
+  );
+  plank.rotation.x = -Math.PI / 2;
+  plank.position.set(i * 1.0, 0.001, -ROOM_L / 2 + 2);
+  scene.add(plank);
+}
+
+// Left wall
+const leftWall = new THREE.Mesh(
+  new THREE.PlaneGeometry(ROOM_L, ROOM_H),
+  stoneMat
+);
+leftWall.rotation.y = Math.PI / 2;
+leftWall.position.set(-ROOM_W / 2, ROOM_H / 2, -ROOM_L / 2 + 2);
+leftWall.receiveShadow = true;
+scene.add(leftWall);
+
+// Right wall
+const rightWall = new THREE.Mesh(
+  new THREE.PlaneGeometry(ROOM_L, ROOM_H),
+  stoneMat
+);
+rightWall.rotation.y = -Math.PI / 2;
+rightWall.position.set(ROOM_W / 2, ROOM_H / 2, -ROOM_L / 2 + 2);
+rightWall.receiveShadow = true;
+scene.add(rightWall);
+
+// Back wall
+const backWall = new THREE.Mesh(
+  new THREE.PlaneGeometry(ROOM_W, ROOM_H),
+  stoneLight
+);
+backWall.position.set(0, ROOM_H / 2, -(ROOM_L - 2));
+backWall.receiveShadow = true;
+scene.add(backWall);
+
+// Ceiling
+const ceiling = new THREE.Mesh(
+  new THREE.PlaneGeometry(ROOM_W, ROOM_L),
+  ceilMat
+);
+ceiling.rotation.x = Math.PI / 2;
+ceiling.position.set(0, ROOM_H, -ROOM_L / 2 + 2);
+scene.add(ceiling);
+
+// Stone blocks texture on walls — horizontal mortar lines
+function addMortarLines(wall, isVertical) {
+  const lineCount = 6;
+  for (let i = 0; i < lineCount; i++) {
+    const y = (i / lineCount) * ROOM_H;
+    const line = new THREE.Mesh(
+      isVertical
+        ? new THREE.PlaneGeometry(0.04, ROOM_H)
+        : new THREE.PlaneGeometry(ROOM_L, 0.04),
+      new THREE.MeshLambertMaterial({ color: 0x1a1410 })
+    );
+    line.position.copy(wall.position);
+    line.rotation.copy(wall.rotation);
+    if (!isVertical) {
+      line.position.y = y;
+      line.position.z += (wall.rotation.y === 0 ? -0.01 : 0);
+    }
+    scene.add(line);
+  }
+}
+
+// Ceiling beams
+for (let z = -4; z > -(ROOM_L - 2); z -= 5) {
+  const beam = new THREE.Mesh(
+    new THREE.BoxGeometry(ROOM_W, 0.22, 0.35),
+    woodMat
+  );
+  beam.position.set(0, ROOM_H - 0.11, z);
+  beam.castShadow = true;
+  scene.add(beam);
+}
+
+// Hanging lanterns
+lanternPositions.forEach(([x, y, z]) => {
+  // Chain
+  const chain = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.015, 0.015, 0.6, 5),
+    new THREE.MeshLambertMaterial({ color: 0x333333 })
+  );
+  chain.position.set(x, ROOM_H - 0.3, z);
+  scene.add(chain);
+
+  // Lantern body
+  const lanternBody = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.15, 0.3, 8),
+    new THREE.MeshLambertMaterial({ color: 0x222222 })
+  );
+  lanternBody.position.set(x, y, z);
+  scene.add(lanternBody);
+
+  // Lantern glow
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09, 8, 6),
+    new THREE.MeshLambertMaterial({ color: 0xffcc44 })
+  );
+  glow.position.set(x, y, z);
+  scene.add(glow);
+});
+
+// Sandbag barrier at shooter's end
+function makeSandbag(x, z) {
+  const bag = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.3, 0.55, 10),
+    new THREE.MeshLambertMaterial({ color: 0x7a6840 })
+  );
+  bag.position.set(x, 0.28, z);
+  bag.castShadow = true;
+  scene.add(bag);
+}
+for (let bx = -5; bx <= 5; bx += 0.7) {
+  makeSandbag(bx, -1.0);
+}
+
+// Distance markers on floor
+const markerMat = new THREE.MeshLambertMaterial({ color: 0xc8a040 });
+[5, 10, 15, 20, 25].forEach(dist => {
+  const marker = new THREE.Mesh(
+    new THREE.PlaneGeometry(ROOM_W - 0.2, 0.05),
+    markerMat
+  );
+  marker.rotation.x = -Math.PI / 2;
+  marker.position.set(0, 0.002, -dist);
+  scene.add(marker);
+});
+
+// Hay bales (backstop at the end)
+function makeHayBale(x, z) {
+  const bale = new THREE.Mesh(
+    new THREE.BoxGeometry(1.0, 1.0, 0.6),
+    new THREE.MeshLambertMaterial({ color: 0xc8a840 })
+  );
+  bale.position.set(x, 0.5, z);
+  bale.castShadow = true;
+  bale.receiveShadow = true;
+  scene.add(bale);
+}
+
+// ─── Targets ──────────────────────────────────────────────────────────────────
+const TARGET_CONFIGS = [
+  { z: -5,  xRange: 6, scale: 1.0 },
+  { z: -10, xRange: 7, scale: 1.0 },
+  { z: -15, xRange: 7, scale: 1.0 },
+  { z: -20, xRange: 8, scale: 0.95 },
+  { z: -25, xRange: 7, scale: 0.9 },
+];
+
+const targets = [];
+
+function makeTarget(config) {
+  const group = new THREE.Group();
+  const scale = config.scale;
+
+  // Post
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06 * scale, 0.08 * scale, 3.2 * scale, 8),
+    new THREE.MeshLambertMaterial({ color: 0x5a3a1a })
+  );
+  post.position.y = 1.6 * scale;
+  post.castShadow = true;
+  group.add(post);
+
+  // Target rings — 3 zones: outer (20), middle (30), bull's eye (50)
+  const ringColors = [0xc0392b, 0x2980b9, 0xf39c12];
+  const radii = [0.9, 0.6, 0.3];
+
+  for (let i = 0; i < 3; i++) {
+    const ring = new THREE.Mesh(
+      new THREE.CircleGeometry(radii[i] * scale, 32),
+      new THREE.MeshLambertMaterial({ color: ringColors[i], side: THREE.DoubleSide })
+    );
+    ring.position.set(0, 3.0 * scale, 0.01 * (3 - i));
+    group.add(ring);
+  }
+
+  // Cross lines on target (bright, to mark the centre)
+  const lineMat = new THREE.MeshLambertMaterial({ color: 0xffffff, opacity: 0.85, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+  const hBar = new THREE.Mesh(new THREE.PlaneGeometry(1.8 * scale, 0.03 * scale), lineMat);
+  hBar.position.set(0, 3.0 * scale, -0.12);
+  group.add(hBar);
+  const vBar = new THREE.Mesh(new THREE.PlaneGeometry(0.03 * scale, 1.8 * scale), lineMat);
+  vBar.position.set(0, 3.0 * scale, -0.12);
+  group.add(vBar);
+
+  const x = (Math.random() - 0.5) * config.xRange;
+  const z = config.z + (Math.random() - 0.5) * 6;
+
+  group.position.set(x, 0, z);
+  // Make target face the player (rotate rings to face +Z, i.e. toward z=0)
+  group.rotation.y = Math.PI; // face toward player
+  scene.add(group);
+
+  // Hay bale behind
+  makeHayBale(x - 1, z + 1.5);
+  makeHayBale(x + 1, z + 1.5);
+
+  const targetRadius = 0.9 * scale;
+  const targetCenter = new THREE.Vector3(x, 3.0 * scale, z);
+
+  targets.push({
+    group,
+    center: targetCenter,
+    radius: targetRadius,
+    scale,
+    hit: false,
+    bobOffset: Math.random() * Math.PI * 2,
+  });
+}
+
+TARGET_CONFIGS.forEach(cfg => makeTarget(cfg));
+
+// ─── Bow (first-person view model) ───────────────────────────────────────────
+const bowGroup = new THREE.Group();
+camera.add(bowGroup);
+scene.add(camera);
+
+const bowMat = new THREE.MeshLambertMaterial({ color: 0x5a3010 });
+const bowLimbMat = new THREE.MeshLambertMaterial({ color: 0x7a4818 });
+
+// Bow is vertical on the left side, grip at hand position
+// Grip (centre of bow, held in left hand)
+const grip = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.025, 0.03, 0.22, 8),
+  bowMat
+);
+grip.position.set(-0.22, -0.28, -0.5);
+bowGroup.add(grip);
+
+// Upper limb — straight up from grip
+const upperLimb = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.012, 0.022, 0.52, 8),
+  bowLimbMat
+);
+upperLimb.position.set(-0.22, 0.07, -0.5);
+bowGroup.add(upperLimb);
+
+// Lower limb — straight down from grip
+const lowerLimb = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.012, 0.022, 0.52, 8),
+  bowLimbMat
+);
+lowerLimb.position.set(-0.22, -0.63, -0.5);
+bowGroup.add(lowerLimb);
+
+// Bowstring — rebuilt each frame to follow nock
+const stringPoints = [
+  new THREE.Vector3(-0.22, 0.34, -0.52),
+  new THREE.Vector3(-0.18, -0.28, -0.52),
+  new THREE.Vector3(-0.22, -0.90, -0.52),
+];
+const stringCurve = new THREE.CatmullRomCurve3(stringPoints);
+let stringGeo = new THREE.TubeGeometry(stringCurve, 20, 0.003, 4, false);
+const stringMesh = new THREE.Mesh(stringGeo, new THREE.MeshLambertMaterial({ color: 0xd4c090 }));
+bowGroup.add(stringMesh);
+
+// Nocked arrow — horizontal, pointing forward along -Z (toward target)
+const nockedArrowMat = new THREE.MeshLambertMaterial({ color: 0x8a6030 });
+const nockedArrow = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.007, 0.007, 0.7, 6),
+  nockedArrowMat
+);
+// Arrow shaft along Z axis
+nockedArrow.rotation.x = Math.PI / 2;
+nockedArrow.position.set(-0.18, -0.28, -0.65);
+bowGroup.add(nockedArrow);
+
+// Arrow tip (metal point at front)
+const arrowTip = new THREE.Mesh(
+  new THREE.ConeGeometry(0.012, 0.07, 6),
+  new THREE.MeshLambertMaterial({ color: 0xaaaaaa })
+);
+arrowTip.rotation.x = Math.PI / 2;
+arrowTip.position.set(-0.18, -0.28, -1.02);
+bowGroup.add(arrowTip);
+
+// Fletching at back of arrow
+const fletchMat = new THREE.MeshLambertMaterial({ color: 0xcc2222, side: THREE.DoubleSide });
+for (let i = 0; i < 3; i++) {
+  const fletch = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.06, 0.1),
+    fletchMat
+  );
+  fletch.position.set(-0.18, -0.28, -0.32);
+  fletch.rotation.z = (i / 3) * Math.PI * 2;
+  fletch.rotation.y = Math.PI / 2;
+  bowGroup.add(fletch);
+}
+
+// ─── Crossbow model ──────────────────────────────────────────────────────────
+const crossbowGroup = new THREE.Group();
+crossbowGroup.visible = false;
+camera.add(crossbowGroup);
+
+const cbMat = new THREE.MeshLambertMaterial({ color: 0x4a2e10 });
+const cbMetalMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+
+// Stock (horizontal body)
+const cbStock = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.55), cbMat);
+cbStock.position.set(0.18, -0.32, -0.55);
+crossbowGroup.add(cbStock);
+
+// Tiller (front part extending forward)
+const cbTiller = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.3), cbMat);
+cbTiller.position.set(0.18, -0.3, -0.9);
+crossbowGroup.add(cbTiller);
+
+// Prod (horizontal limbs — perpendicular to stock)
+const cbProd = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.55, 8), cbMat);
+cbProd.rotation.z = Math.PI / 2;
+cbProd.position.set(0.18, -0.28, -0.92);
+crossbowGroup.add(cbProd);
+
+// String (horizontal, connecting prod tips)
+const cbStringPts = [
+  new THREE.Vector3(-0.09, -0.28, -0.95),
+  new THREE.Vector3(0.18, -0.28, -0.95),
+  new THREE.Vector3(0.45, -0.28, -0.95),
+];
+const cbStringCurve = new THREE.CatmullRomCurve3(cbStringPts);
+const cbStringMesh = new THREE.Mesh(
+  new THREE.TubeGeometry(cbStringCurve, 12, 0.003, 4, false),
+  new THREE.MeshLambertMaterial({ color: 0xd4c090 })
+);
+crossbowGroup.add(cbStringMesh);
+
+// Bolt (short thick projectile on top of tiller)
+const cbBolt = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.32, 6), new THREE.MeshLambertMaterial({ color: 0x8a6030 }));
+cbBolt.rotation.x = Math.PI / 2;
+cbBolt.position.set(0.18, -0.27, -0.77);
+crossbowGroup.add(cbBolt);
+const cbBoltTip = new THREE.Mesh(new THREE.ConeGeometry(0.013, 0.06, 6), cbMetalMat);
+cbBoltTip.rotation.x = Math.PI / 2;
+cbBoltTip.position.set(0.18, -0.27, -0.95);
+crossbowGroup.add(cbBoltTip);
+
+// ─── Gun model ────────────────────────────────────────────────────────────────
+const gunGroup = new THREE.Group();
+gunGroup.visible = false;
+camera.add(gunGroup);
+
+const gunMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+const gunMetalMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
+
+// Body / receiver
+const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.1, 0.32), gunMat);
+gunBody.position.set(0.18, -0.33, -0.6);
+gunGroup.add(gunBody);
+
+// Barrel (long, pointing forward)
+const gunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.55, 10), gunMetalMat);
+gunBarrel.rotation.x = Math.PI / 2;
+gunBarrel.position.set(0.18, -0.28, -0.85);
+gunGroup.add(gunBarrel);
+
+// Grip / handle
+const gunGrip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.13, 0.07), gunMat);
+gunGrip.rotation.x = 0.3;
+gunGrip.position.set(0.18, -0.42, -0.48);
+gunGroup.add(gunGrip);
+
+// Trigger guard
+const gunGuard = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.006, 6, 12, Math.PI), gunMetalMat);
+gunGuard.rotation.x = Math.PI / 2;
+gunGuard.position.set(0.18, -0.41, -0.52);
+gunGroup.add(gunGuard);
+
+// ─── Pistol model ─────────────────────────────────────────────────────────────
+const pistolGroup = new THREE.Group();
+pistolGroup.visible = false;
+camera.add(pistolGroup);
+
+const pistolMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+const pistolMetalMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
+
+const pistolBody = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.09, 0.22), pistolMat);
+pistolBody.position.set(0.18, -0.34, -0.55);
+pistolGroup.add(pistolBody);
+
+const pistolBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.3, 10), pistolMetalMat);
+pistolBarrel.rotation.x = Math.PI / 2;
+pistolBarrel.position.set(0.18, -0.29, -0.72);
+pistolGroup.add(pistolBarrel);
+
+const pistolGrip = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.11, 0.06), pistolMat);
+pistolGrip.rotation.x = 0.25;
+pistolGrip.position.set(0.18, -0.43, -0.47);
+pistolGroup.add(pistolGrip);
+
+// ─── Minigun model ────────────────────────────────────────────────────────────
+const minigunGroup = new THREE.Group();
+minigunGroup.visible = false;
+camera.add(minigunGroup);
+
+const mgMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+const mgMetalMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+const mgAccentMat = new THREE.MeshLambertMaterial({ color: 0x8a1a1a });
+
+// Main body housing
+const mgBody = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.38, 10), mgMat);
+mgBody.rotation.x = Math.PI / 2;
+mgBody.position.set(0.15, -0.32, -0.62);
+minigunGroup.add(mgBody);
+
+// 6 rotating barrels arranged in a circle
+const barrelOffsets = [];
+for (let i = 0; i < 6; i++) {
+  const angle = (i / 6) * Math.PI * 2;
+  const bx = Math.cos(angle) * 0.055;
+  const by = Math.sin(angle) * 0.055;
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.52, 8), mgMetalMat);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0.15 + bx, -0.32 + by, -0.82);
+  minigunGroup.add(barrel);
+  barrelOffsets.push({ mesh: barrel, angle });
+}
+
+// Grip
+const mgGrip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.07), mgMat);
+mgGrip.rotation.x = 0.3;
+mgGrip.position.set(0.15, -0.44, -0.5);
+minigunGroup.add(mgGrip);
+
+// Accent stripe
+const mgStripe = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.02, 0.4), mgAccentMat);
+mgStripe.rotation.x = Math.PI / 2;
+mgStripe.position.set(0.15, -0.32, -0.62);
+minigunGroup.add(mgStripe);
+
+// ─── Sniper model ─────────────────────────────────────────────────────────────
+const sniperGroup = new THREE.Group();
+sniperGroup.visible = false;
+camera.add(sniperGroup);
+
+const snpMat = new THREE.MeshLambertMaterial({ color: 0x2a1a0a });
+const snpMetalMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
+const snpScopeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+
+// Stock
+const snpStock = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.07, 0.55), snpMat);
+snpStock.position.set(0.18, -0.34, -0.6);
+sniperGroup.add(snpStock);
+
+// Long barrel
+const snpBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.75, 10), snpMetalMat);
+snpBarrel.rotation.x = Math.PI / 2;
+snpBarrel.position.set(0.18, -0.28, -0.97);
+sniperGroup.add(snpBarrel);
+
+// Scope tube
+const snpScope = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 10), snpScopeMat);
+snpScope.rotation.x = Math.PI / 2;
+snpScope.position.set(0.18, -0.24, -0.65);
+sniperGroup.add(snpScope);
+
+// Scope lens
+const snpLens = new THREE.Mesh(new THREE.CircleGeometry(0.024, 12), new THREE.MeshLambertMaterial({ color: 0x223344 }));
+snpLens.rotation.x = Math.PI / 2;
+snpLens.position.set(0.18, -0.24, -0.51);
+sniperGroup.add(snpLens);
+
+// Grip
+const snpGrip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, 0.06), snpMat);
+snpGrip.rotation.x = 0.25;
+snpGrip.position.set(0.18, -0.43, -0.49);
+sniperGroup.add(snpGrip);
+
+// ─── equipWeapon helper ───────────────────────────────────────────────────────
+function equipWeapon(w) {
+  // Stop minigun if switching away
+  if (minigunInterval && w !== 'minigun') {
+    clearInterval(minigunInterval);
+    minigunInterval = null;
+  }
+  // Exit sniper zoom if switching away
+  if (state.sniperZoomed && w !== 'sniper') {
+    state.sniperZoomed = false;
+    camera.fov = 72;
+    camera.updateProjectionMatrix();
+    document.getElementById('sniper-scope').classList.remove('active');
+    document.getElementById('crosshair').style.display = '';
+  }
+  state.weapon = w;
+  bowGroup.visible = w === 'bow';
+  crossbowGroup.visible = w === 'crossbow';
+  gunGroup.visible = w === 'gun';
+  pistolGroup.visible = w === 'pistol';
+  minigunGroup.visible = w === 'minigun';
+  sniperGroup.visible = w === 'sniper';
+}
+
+// ─── Arrows in flight ────────────────────────────────────────────────────────
+const flyingArrows = [];
+
+function spawnProjectile(power) {
+  const w = state.weapon;
+  const arrowGroup = new THREE.Group();
+
+  if (w === 'gun' || w === 'minigun' || w === 'pistol') {
+    // Small bullet
+    const bullet = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, 0.08, 8),
+      new THREE.MeshLambertMaterial({ color: 0xaaaaaa })
+    );
+    bullet.rotation.x = Math.PI / 2;
+    arrowGroup.add(bullet);
+  } else if (w === 'crossbow') {
+    // Short thick bolt
+    const bolt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.009, 0.009, 0.32, 6),
+      new THREE.MeshLambertMaterial({ color: 0x8a6030 })
+    );
+    bolt.rotation.x = Math.PI / 2;
+    arrowGroup.add(bolt);
+    const boltTip = new THREE.Mesh(
+      new THREE.ConeGeometry(0.013, 0.06, 6),
+      new THREE.MeshLambertMaterial({ color: 0xbbbbbb })
+    );
+    boltTip.rotation.x = Math.PI / 2;
+    boltTip.position.z = -0.19;
+    arrowGroup.add(boltTip);
+  } else if (w === 'sniper') {
+    // Long thin bullet
+    const snpBullet = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.008, 0.008, 0.14, 8),
+      new THREE.MeshLambertMaterial({ color: 0xdddddd })
+    );
+    snpBullet.rotation.x = Math.PI / 2;
+    arrowGroup.add(snpBullet);
+  } else {
+    // Arrow
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.007, 0.007, 0.6, 6),
+      new THREE.MeshLambertMaterial({ color: 0x8a6030 })
+    );
+    shaft.rotation.x = Math.PI / 2;
+    arrowGroup.add(shaft);
+    const tip = new THREE.Mesh(
+      new THREE.ConeGeometry(0.014, 0.07, 6),
+      new THREE.MeshLambertMaterial({ color: 0xbbbbbb })
+    );
+    tip.rotation.x = Math.PI / 2;
+    tip.position.z = -0.33;
+    arrowGroup.add(tip);
+  }
+
+  const startPos = new THREE.Vector3();
+  camera.getWorldPosition(startPos);
+  const camForward = new THREE.Vector3();
+  camera.getWorldDirection(camForward);
+  const camRight = new THREE.Vector3();
+  camRight.crossVectors(camForward, new THREE.Vector3(0, 1, 0)).normalize();
+  startPos.addScaledVector(camForward, 0.5);
+  startPos.addScaledVector(camRight, 0.15);
+  startPos.y -= 0.05;
+
+  arrowGroup.position.copy(startPos);
+
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+
+  let speed, gravityMult;
+  if (w === 'gun' || w === 'minigun') {
+    speed = 60;
+    gravityMult = 0.0;
+  } else if (w === 'pistol') {
+    speed = 45;
+    gravityMult = 0.08;
+  } else if (w === 'sniper') {
+    speed = 80;
+    gravityMult = 0.0;
+  } else if (w === 'crossbow') {
+    speed = 22 + power * 8;
+    gravityMult = 0.25;
+  } else {
+    speed = 12 + power * 15;
+    gravityMult = 1.0;
+  }
+
+  const vel = dir.clone().multiplyScalar(speed);
+  scene.add(arrowGroup);
+
+  flyingArrows.push({ mesh: arrowGroup, vel, alive: true, age: 0, gravityMult });
+}
+
+// ─── Particles for hit effect ─────────────────────────────────────────────────
+const particleSystems = [];
+
+function spawnHitParticles(pos, isBullseye) {
+  const count = isBullseye ? 30 : 15;
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = [];
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = pos.x;
+    positions[i * 3 + 1] = pos.y;
+    positions[i * 3 + 2] = pos.z;
+    velocities.push(new THREE.Vector3(
+      (Math.random() - 0.5) * 4,
+      Math.random() * 3 + 1,
+      (Math.random() - 0.5) * 4
+    ));
+  }
+
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: isBullseye ? 0xffd700 : 0xff6622,
+    size: 0.06,
+    transparent: true,
+  });
+  const ps = new THREE.Points(geo, mat);
+  scene.add(ps);
+
+  particleSystems.push({ ps, velocities, life: 1.0 });
+}
+
+// ─── Scored arrows embedded in targets ───────────────────────────────────────
+function embedArrow(hitPos) {
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.007, 0.007, 0.5, 6),
+    new THREE.MeshLambertMaterial({ color: 0x8a6030 })
+  );
+  shaft.position.copy(hitPos);
+  shaft.rotation.x = Math.PI / 2;
+  shaft.position.z += 0.25;
+  scene.add(shaft);
+}
+
+// ─── Scoring ─────────────────────────────────────────────────────────────────
+function checkHits(arrow) {
+  for (const target of targets) {
+    if (target.hit) continue;
+    const dist = arrow.mesh.position.distanceTo(target.center);
+    if (dist < target.radius * 1.1) {
+      // Determine ring using 2D distance (X/Y only, ignore depth)
+      const dx = arrow.mesh.position.x - target.center.x;
+      const dy = arrow.mesh.position.y - target.center.y;
+      const dist2D = Math.sqrt(dx * dx + dy * dy);
+      const ratio = dist2D / target.radius;
+      let points, label, bullseye;
+      if (ratio < 0.33) { points = 50; label = "BULL'S EYE!"; bullseye = true; }
+      else if (ratio < 0.67) { points = 30; label = "MIDDLE!"; bullseye = false; }
+      else { points = 20; label = "HIT!"; bullseye = false; }
+
+      // Streak bonus
+      state.streak++;
+      if (state.streak > 1) points = Math.round(points * (1 + state.streak * 0.1));
+
+      addScore(points, label, bullseye);
+      target.hit = true;
+
+      // Visual: dim target
+      target.group.traverse(c => {
+        if (c.material) { c.material.transparent = true; c.material.opacity = 0.4; }
+      });
+
+      spawnHitParticles(arrow.mesh.position.clone(), bullseye);
+      embedArrow(arrow.mesh.position.clone());
+
+      // Remove arrow from scene
+      scene.remove(arrow.mesh);
+      arrow.alive = false;
+
+      // Respawn target after delay
+      setTimeout(() => respawnTarget(target), 3000);
+
+      return true;
+    }
+  }
+  return false;
+}
+
+function respawnTarget(target) {
+  if (!state.gameActive) return;
+  target.hit = false;
+  // Move to new position
+  const cfg = TARGET_CONFIGS[Math.floor(Math.random() * TARGET_CONFIGS.length)];
+  const newX = (Math.random() - 0.5) * cfg.xRange;
+  const newZ = cfg.z + (Math.random() - 0.5) * 6;
+  target.group.position.set(newX, 0, newZ);
+  target.center.set(newX, 3.0 * target.scale, newZ);
+  target.group.traverse(c => {
+    if (c.material) { c.material.opacity = 1; c.material.transparent = false; }
+  });
+}
+
+function addScore(pts, label, bullseye) {
+  state.score += pts;
+
+  // Update UI
+  const sv = document.getElementById('score-value');
+  sv.textContent = state.score;
+  sv.classList.add('pop');
+  setTimeout(() => sv.classList.remove('pop'), 150);
+
+  const hl = document.getElementById('hit-label');
+  hl.textContent = label + (pts > 50 ? ` +${pts}` : '');
+  hl.classList.add('active');
+  setTimeout(() => hl.classList.remove('active'), 1200);
+
+  const hf = document.getElementById('hit-flash');
+  hf.classList.add('active');
+  setTimeout(() => hf.classList.remove('active'), 80);
+
+  // Streak
+  const streakEl = document.getElementById('streak');
+  if (state.streak > 1) {
+    streakEl.textContent = `${state.streak}× STREAK`;
+    streakEl.classList.add('visible');
+  } else {
+    streakEl.classList.remove('visible');
+  }
+
+  updateShopUI();
+}
+
+// ─── Arrow depletion UI ───────────────────────────────────────────────────────
+function updateArrowsUI() {
+  const iconsContainer = document.getElementById('arrows-icons');
+  const currentIconCount = iconsContainer.children.length;
+
+  // Add icons if arrows exceed current icon count
+  for (let i = currentIconCount + 1; i <= state.arrows; i++) {
+    const el = document.createElement('div');
+    el.className = 'arrow-icon';
+    el.id = `a${i}`;
+    iconsContainer.appendChild(el);
+  }
+
+  // Update used/available state
+  const icons = iconsContainer.children;
+  for (let i = 0; i < icons.length; i++) {
+    if (i >= state.arrows) icons[i].classList.add('used');
+    else icons[i].classList.remove('used');
+  }
+}
+
+function updateShopUI() {
+  const arrowBtn = document.getElementById('buy-arrow-btn');
+  arrowBtn.disabled = state.score < 25;
+  arrowBtn.style.opacity = state.score >= 25 ? '1' : '0.35';
+
+  function weaponBtn(id, key, cost, label) {
+    const btn = document.getElementById(id);
+    if (state.weapons[key]) {
+      btn.innerHTML = `${label} <span class="weapon-cost">${state.weapon === key ? '[equipped]' : '[equip]'}</span>`;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.classList.toggle('weapon-equipped', state.weapon === key);
+    } else {
+      btn.innerHTML = `${label} <span class="weapon-cost">${cost} pts</span>`;
+      btn.disabled = state.score < cost;
+      btn.style.opacity = state.score >= cost ? '1' : '0.35';
+      btn.classList.remove('weapon-equipped');
+    }
+  }
+
+  weaponBtn('buy-crossbow-btn', 'crossbow', 500, 'Crossbow');
+  weaponBtn('buy-pistol-btn',   'pistol',   750, 'Pistol');
+  weaponBtn('buy-gun-btn',      'minigun', 1000, 'Minigun');
+  weaponBtn('buy-sniper-btn',   'sniper',  1000, 'Sniper');
+}
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+document.addEventListener('mousemove', e => {
+  if (!state.gameActive) return;
+  state.mouseX -= e.movementX * 0.002;
+  state.mouseY = Math.max(-0.5, Math.min(0.5, state.mouseY - e.movementY * 0.002));
+});
+
+document.addEventListener('keydown', e => {
+  if (!state.gameActive) return;
+  if (e.code === 'KeyA') state.keys.a = true;
+  if (e.code === 'KeyD') state.keys.d = true;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    const w = state.weapon;
+
+    if (w === 'minigun') {
+      // Start continuous fire on hold
+      if (!minigunInterval && state.arrows > 0) {
+        const fireOnce = () => {
+          if (!state.gameActive || state.arrows <= 0) {
+            clearInterval(minigunInterval);
+            minigunInterval = null;
+            if (state.arrows <= 0) endGameTimer = setTimeout(endGame, 2500);
+            return;
+          }
+          spawnProjectile(1.0);
+          state.arrows--;
+          state.streak = 0;
+          updateArrowsUI();
+          updateShopUI();
+        };
+        fireOnce();
+        minigunInterval = setInterval(fireOnce, 120);
+      }
+    } else if (w === 'pistol') {
+      // Instant single shot
+      if (state.arrows > 0 && !state.fired) {
+        state.fired = true;
+        document.getElementById('crosshair').classList.add('release');
+        setTimeout(() => document.getElementById('crosshair').classList.remove('release'), 200);
+        spawnProjectile(1.0);
+        state.arrows--;
+        state.streak = 0;
+        updateArrowsUI();
+        updateShopUI();
+        if (state.arrows <= 0) endGameTimer = setTimeout(endGame, 2500);
+      }
+    } else if (w === 'sniper') {
+      // Hold = zoom in with scope overlay
+      if (!state.sniperZoomed) {
+        state.sniperZoomed = true;
+        camera.fov = 20;
+        camera.updateProjectionMatrix();
+        document.getElementById('sniper-scope').classList.add('active');
+        document.getElementById('crosshair').style.display = 'none';
+      }
+    } else if (!state.charging && state.arrows > 0 && !activeArrow) {
+      // Bow / crossbow draw
+      state.charging = true;
+      state.power = 0;
+      state.fired = false;
+      document.getElementById('crosshair').classList.add('charging');
+      document.getElementById('power-meter').classList.add('visible');
+    }
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code === 'KeyA') state.keys.a = false;
+  if (e.code === 'KeyD') state.keys.d = false;
+  if (e.code === 'Space') {
+    const w = state.weapon;
+
+    if (w === 'minigun') {
+      // Stop continuous fire
+      if (minigunInterval) {
+        clearInterval(minigunInterval);
+        minigunInterval = null;
+      }
+    } else if (w === 'pistol') {
+      state.fired = false;
+    } else if (w === 'sniper') {
+      // Release = fire + unzoom
+      if (state.sniperZoomed && state.arrows > 0) {
+        spawnProjectile(1.0);
+        state.arrows--;
+        state.streak = 0;
+        updateArrowsUI();
+        updateShopUI();
+        document.getElementById('crosshair').classList.add('release');
+        setTimeout(() => document.getElementById('crosshair').classList.remove('release'), 200);
+        if (state.arrows <= 0) endGameTimer = setTimeout(endGame, 2500);
+      }
+      state.sniperZoomed = false;
+      camera.fov = 72;
+      camera.updateProjectionMatrix();
+      document.getElementById('sniper-scope').classList.remove('active');
+      document.getElementById('crosshair').style.display = '';
+    } else if (state.charging && !state.fired) {
+      state.fired = true;
+      state.charging = false;
+      document.getElementById('crosshair').classList.remove('charging');
+      document.getElementById('crosshair').classList.add('release');
+      setTimeout(() => document.getElementById('crosshair').classList.remove('release'), 200);
+      document.getElementById('power-meter').classList.remove('visible');
+      document.getElementById('power-fill').style.width = '0%';
+
+      spawnProjectile(state.power);
+      state.arrows--;
+      state.streak = 0;
+      updateArrowsUI();
+
+      if (state.arrows <= 0) {
+        endGameTimer = setTimeout(endGame, 2500);
+      }
+    }
+  }
+});
+
+// ─── Splash & game control ────────────────────────────────────────────────────
+const splash = document.getElementById('splash');
+splash.addEventListener('click', () => {
+  splash.style.display = 'none';
+  state.gameActive = true;
+  document.getElementById('shop-panel').style.display = 'block';
+  updateShopUI();
+  // Try to lock pointer
+  canvas.requestPointerLock().catch(() => {});
+});
+
+document.getElementById('buy-arrow-btn').addEventListener('click', () => {
+  if (!state.gameActive || state.score < 25) return;
+  state.score -= 25;
+  state.arrows++;
+  document.getElementById('score-value').textContent = state.score;
+  updateArrowsUI();
+  updateShopUI();
+  if (endGameTimer) {
+    clearTimeout(endGameTimer);
+    endGameTimer = null;
+  }
+});
+
+document.getElementById('buy-crossbow-btn').addEventListener('click', () => {
+  if (!state.gameActive) return;
+  if (!state.weapons.crossbow) {
+    if (state.score < 500) return;
+    state.score -= 500;
+    state.weapons.crossbow = true;
+    document.getElementById('score-value').textContent = state.score;
+  }
+  equipWeapon('crossbow');
+  updateShopUI();
+});
+
+document.getElementById('buy-gun-btn').addEventListener('click', () => {
+  if (!state.gameActive) return;
+  if (!state.weapons.minigun) {
+    if (state.score < 1000) return;
+    state.score -= 1000;
+    state.weapons.minigun = true;
+    document.getElementById('score-value').textContent = state.score;
+  }
+  equipWeapon('minigun');
+  updateShopUI();
+});
+
+document.getElementById('buy-pistol-btn').addEventListener('click', () => {
+  if (!state.gameActive) return;
+  if (!state.weapons.pistol) {
+    if (state.score < 750) return;
+    state.score -= 750;
+    state.weapons.pistol = true;
+    document.getElementById('score-value').textContent = state.score;
+  }
+  equipWeapon('pistol');
+  updateShopUI();
+});
+
+document.getElementById('buy-sniper-btn').addEventListener('click', () => {
+  if (!state.gameActive) return;
+  if (!state.weapons.sniper) {
+    if (state.score < 1000) return;
+    state.score -= 1000;
+    state.weapons.sniper = true;
+    document.getElementById('score-value').textContent = state.score;
+  }
+  equipWeapon('sniper');
+  updateShopUI();
+});
+
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement && state.gameActive) {
+    // pointer lock lost — still playable, just less smooth
+  }
+});
+
+document.getElementById('restart-btn').addEventListener('click', () => {
+  document.getElementById('game-over').classList.remove('visible');
+  restartGame();
+});
+
+function restartGame() {
+  state.score = 0;
+  state.arrows = 10;
+  state.streak = 0;
+  state.charging = false;
+  state.power = 0;
+  state.gameActive = true;
+  playerX = 0;
+  flyingArrows.length = 0;
+
+  document.getElementById('score-value').textContent = '0';
+
+  // Reset arrow icons back to 10
+  const iconsContainer = document.getElementById('arrows-icons');
+  while (iconsContainer.children.length > 10) {
+    iconsContainer.removeChild(iconsContainer.lastChild);
+  }
+  updateArrowsUI();
+  state.weapon = 'bow';
+  state.weapons = { bow: true, crossbow: false, gun: false, pistol: false, minigun: false, sniper: false };
+  state.sniperZoomed = false;
+  if (minigunInterval) { clearInterval(minigunInterval); minigunInterval = null; }
+  camera.fov = 72;
+  camera.updateProjectionMatrix();
+  document.getElementById('sniper-scope').classList.remove('active');
+  document.getElementById('crosshair').style.display = '';
+  equipWeapon('bow');
+  document.getElementById('shop-panel').style.display = 'block';
+  updateShopUI();
+
+  // Reset targets
+  targets.forEach((t, i) => {
+    const cfg = TARGET_CONFIGS[i % TARGET_CONFIGS.length];
+    const x = (Math.random() - 0.5) * cfg.xRange;
+    const z = cfg.z + (Math.random() - 0.5) * 6;
+    t.group.position.set(x, 0, z);
+    t.center.set(x, 3.0 * t.scale, z);
+    t.hit = false;
+    t.group.traverse(c => {
+      if (c.material) { c.material.opacity = 1; c.material.transparent = false; }
+    });
+  });
+
+  canvas.requestPointerLock().catch(() => {});
+}
+
+function endGame() {
+  state.gameActive = false;
+  endGameTimer = null;
+  if (minigunInterval) { clearInterval(minigunInterval); minigunInterval = null; }
+  if (state.sniperZoomed) {
+    state.sniperZoomed = false;
+    camera.fov = 72;
+    camera.updateProjectionMatrix();
+    document.getElementById('sniper-scope').classList.remove('active');
+    document.getElementById('crosshair').style.display = '';
+  }
+  document.exitPointerLock();
+  document.getElementById('shop-panel').style.display = 'none';
+  document.getElementById('final-score').textContent =
+    `Final Score: ${state.score} — ${getScoreTitle(state.score)}`;
+  document.getElementById('game-over').classList.add('visible');
+}
+
+function getScoreTitle(s) {
+  if (s >= 400) return 'Legendary Archer';
+  if (s >= 250) return 'Master Bowman';
+  if (s >= 150) return 'Skilled Hunter';
+  if (s >= 75) return 'Apprentice Archer';
+  return 'Keep Practicing';
+}
+
+// ─── Game loop ────────────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+const GRAVITY = -4.5;
+const MOVE_SPEED = 5;
+
+// ─── Trajectory preview ───────────────────────────────────────────────────────
+function updateTrajectory() {
+  if (!settings.trajectory || !state.gameActive) {
+    trajectoryLine.visible = false;
+    return;
+  }
+  const w = state.weapon;
+  // Don't show during sniper zoom (scope replaces trajectory)
+  if (state.sniperZoomed) {
+    trajectoryLine.visible = false;
+    return;
+  }
+
+  trajectoryLine.visible = true;
+
+  const simPos = new THREE.Vector3();
+  camera.getWorldPosition(simPos);
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  simPos.addScaledVector(dir, 0.6);
+
+  let speed, gravMult;
+  if (w === 'gun' || w === 'minigun') { speed = 60; gravMult = 0; }
+  else if (w === 'pistol') { speed = 45; gravMult = 0.08; }
+  else if (w === 'sniper') { speed = 80; gravMult = 0; }
+  else if (w === 'crossbow') { speed = 22 + state.power * 8; gravMult = 0.25; }
+  else { speed = 12 + state.power * 15; gravMult = 1.0; }
+
+  const vel = dir.clone().multiplyScalar(speed);
+  const simDt = 0.05;
+  const pts = [];
+
+  const startPos = simPos.clone();
+  for (let i = 0; i < 80; i++) {
+    pts.push(simPos.clone());
+    vel.y += GRAVITY * gravMult * simDt;
+    simPos.addScaledVector(vel, simDt);
+    if (simPos.y < 0) break;
+    if (simPos.distanceTo(startPos) > 30) break; // cap line length
+  }
+
+  trajectoryGeo.setFromPoints(pts);
+  trajectoryLine.computeLineDistances();
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.getElapsedTime();
+
+  if (!state.gameActive) {
+    renderer.render(scene, camera);
+    return;
+  }
+
+  // Player movement
+  if (state.keys.a) playerX -= MOVE_SPEED * dt;
+  if (state.keys.d) playerX += MOVE_SPEED * dt;
+  playerX = Math.max(-4, Math.min(4, playerX));
+
+  camera.position.x = playerX;
+  camera.position.y = 1.65 + Math.sin(t * 1.2) * 0.008;
+  camera.rotation.y = state.mouseX;
+  camera.rotation.x = state.mouseY;
+
+  // Bow sway
+  bowGroup.position.set(
+    0.0 + Math.sin(t * 1.2) * 0.003,
+    -0.02 + Math.sin(t * 0.9) * 0.003,
+    -0.02
+  );
+
+  // Charging power (bow draw animation only for bow)
+  if (state.weapon === 'bow') {
+    if (state.charging) {
+      state.power = Math.min(1.0, state.power + dt * 0.8);
+      document.getElementById('power-fill').style.width = (state.power * 100) + '%';
+      const pullback = state.power * 0.15;
+      nockedArrow.position.z = -0.65 + pullback;
+      arrowTip.position.z = -1.02 + pullback;
+    } else {
+      nockedArrow.position.z += (-0.65 - nockedArrow.position.z) * 0.2;
+      arrowTip.position.z += (-1.02 - arrowTip.position.z) * 0.2;
+    }
+    // Rebuild string to follow nock point each frame
+    const nockZ = nockedArrow.position.z;
+    stringCurve.points[0].set(-0.22, 0.34, -0.52);
+    stringCurve.points[1].set(-0.18, -0.28, nockZ);
+    stringCurve.points[2].set(-0.22, -0.90, -0.52);
+    stringMesh.geometry.dispose();
+    stringMesh.geometry = new THREE.TubeGeometry(stringCurve, 20, 0.003, 4, false);
+  } else if (state.weapon === 'crossbow') {
+    if (state.charging) {
+      state.power = Math.min(1.0, state.power + dt * 0.8);
+      document.getElementById('power-fill').style.width = (state.power * 100) + '%';
+    }
+    // Rebuild crossbow string to follow draw
+    const cbPull = state.charging ? state.power * 0.12 : 0;
+    const cbNockZ = -0.92 + cbPull;
+    cbStringCurve.points[0].set(-0.09, -0.28, -0.95);
+    cbStringCurve.points[1].set(0.18, -0.28, cbNockZ);
+    cbStringCurve.points[2].set(0.45, -0.28, -0.95);
+    cbStringMesh.geometry.dispose();
+    cbStringMesh.geometry = new THREE.TubeGeometry(cbStringCurve, 12, 0.003, 4, false);
+  } else if (state.charging) {
+    state.power = Math.min(1.0, state.power + dt * 0.8);
+    document.getElementById('power-fill').style.width = (state.power * 100) + '%';
+  }
+
+  // Update flying arrows
+  for (let i = flyingArrows.length - 1; i >= 0; i--) {
+    const a = flyingArrows[i];
+    if (!a.alive) { flyingArrows.splice(i, 1); continue; }
+
+    a.age += dt;
+    a.vel.y += GRAVITY * (a.gravityMult !== undefined ? a.gravityMult : 1.0) * dt;
+    a.mesh.position.addScaledVector(a.vel, dt);
+
+    // Orient arrow along velocity
+    if (a.vel.length() > 0.1) {
+      a.mesh.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 0, -1),
+        a.vel.clone().normalize()
+      );
+    }
+
+    // Check hits
+    if (checkHits(a)) continue;
+
+    // Hit ground
+    if (a.mesh.position.y < 0.1) {
+      scene.remove(a.mesh);
+      a.alive = false;
+      flyingArrows.splice(i, 1);
+      state.streak = 0;
+      document.getElementById('streak').classList.remove('visible');
+    }
+
+    // Fly too far
+    if (a.age > 8) {
+      scene.remove(a.mesh);
+      a.alive = false;
+      flyingArrows.splice(i, 1);
+    }
+  }
+
+  // Update particle systems
+  for (let i = particleSystems.length - 1; i >= 0; i--) {
+    const p = particleSystems[i];
+    p.life -= dt * 1.2;
+    p.ps.material.opacity = Math.max(0, p.life);
+    const pos = p.ps.geometry.attributes.position;
+    for (let j = 0; j < p.velocities.length; j++) {
+      p.velocities[j].y += GRAVITY * dt * 0.3;
+      pos.setXYZ(j,
+        pos.getX(j) + p.velocities[j].x * dt,
+        pos.getY(j) + p.velocities[j].y * dt,
+        pos.getZ(j) + p.velocities[j].z * dt
+      );
+    }
+    pos.needsUpdate = true;
+    if (p.life <= 0) {
+      scene.remove(p.ps);
+      particleSystems.splice(i, 1);
+    }
+  }
+
+  // Target gentle sway
+  targets.forEach(tg => {
+    if (!tg.hit) {
+      tg.group.rotation.y = Math.PI + Math.sin(t * 0.3 + tg.bobOffset) * 0.02;
+    }
+  });
+
+  updateTrajectory();
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+document.getElementById('settings-btn').addEventListener('click', () => {
+  const panel = document.getElementById('settings-panel');
+  panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+});
+
+document.getElementById('toggle-trajectory').addEventListener('click', () => {
+  settings.trajectory = !settings.trajectory;
+  const btn = document.getElementById('toggle-trajectory');
+  btn.textContent = settings.trajectory ? 'ON' : 'OFF';
+  btn.classList.toggle('off', !settings.trajectory);
+  if (!settings.trajectory) trajectoryLine.visible = false;
+});
+
+// ─── Resize ───────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ─── Custom cursor ────────────────────────────────────────────────────────────
+const cursor = document.getElementById('custom-cursor');
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top = e.clientY + 'px';
+});
+</script>
+</body>
+</html>
