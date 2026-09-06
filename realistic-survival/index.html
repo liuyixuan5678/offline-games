@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Realistic Survival</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+canvas { display: block; }
+#hud { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; color: #fff; }
+
+/* ── Top bar ── */
+#topbar {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 18px; align-items: center;
+  background: rgba(0,0,0,0.82); padding: 8px 22px; border-radius: 24px;
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+#basebar { width: 100px; height: 9px; background: #333; border-radius: 5px; overflow: hidden; display:inline-block; vertical-align:middle; }
+#basefill { height: 100%; background: linear-gradient(90deg, #4CAF50, #8BC34A); border-radius: 5px; transition: width 0.15s; }
+.res { display:flex; align-items:center; gap:5px; }
+
+/* ── Inventory bar ── */
+#toolbar {
+  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; align-items: flex-end;
+  background: rgba(0,0,0,0.88); padding: 8px 12px; border-radius: 14px;
+  pointer-events: all; border: 1px solid rgba(255,255,255,0.08);
+}
+.inv-slot {
+  width: 62px; height: 62px; border-radius: 8px; border: 2px solid #444;
+  background: #1c1c1c; cursor: pointer; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; position: relative;
+  font-size: 11px; color: #aaa; transition: border-color 0.12s, background 0.12s;
+  user-select: none;
+}
+.inv-slot:hover { border-color: #888; background: #252525; }
+.inv-slot.sel   { border-color: #FFD700; background: #2e2200; color: #FFD700; }
+.inv-slot.empty { opacity: 0.38; cursor: default; }
+.inv-slot .slot-icon  { font-size: 22px; line-height: 1; margin-bottom: 2px; }
+.inv-slot .slot-label { font-size: 10px; }
+.inv-count {
+  position: absolute; top: 3px; right: 5px;
+  font-size: 12px; font-weight: bold; color: #fff;
+  text-shadow: 0 0 4px #000;
+}
+.inv-sep { width: 1px; background: #333; height: 50px; align-self: center; margin: 0 2px; }
+
+/* ── Wave / timer buttons ── */
+#startbtn {
+  position: absolute; bottom: 90px; right: 18px; pointer-events: all;
+  padding: 10px 18px; border: 2px solid #2E7D32; border-radius: 10px;
+  background: #1B5E20; color: #fff; font-size: 14px; font-weight: bold;
+  cursor: pointer; font-family: inherit;
+}
+#startbtn:hover { background: #2E7D32; }
+#craftbtn {
+  position: absolute; bottom: 90px; left: 18px; pointer-events: all;
+  padding: 10px 18px; border: 2px solid #F9A825; border-radius: 10px;
+  background: #E65100; color: #fff; font-size: 14px; font-weight: bold;
+  cursor: pointer; font-family: inherit;
+}
+#craftbtn:hover { background: #F57C00; }
+#wavetimer {
+  position: absolute; bottom: 90px; right: 150px;
+  background: rgba(0,0,0,0.7); padding: 8px 14px; border-radius: 10px; font-size: 13px;
+}
+#waveinfo {
+  position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.78); padding: 7px 20px; border-radius: 10px;
+  font-size: 13px; display:none;
+}
+
+/* ── Craft menu ── */
+#craftOverlay {
+  position: absolute; top:0;left:0;right:0;bottom:0;
+  background: rgba(0,0,0,0.6); display:none;
+  justify-content:center; align-items:center; pointer-events:all;
+}
+#craftModal {
+  background: #1a1a1a; border: 1px solid #444; border-radius: 16px;
+  padding: 20px 24px; width: 560px; max-height: 80vh; overflow-y: auto;
+}
+#craftModal h2 { font-size: 18px; margin-bottom: 16px; color: #fff; }
+.craft-card {
+  display: flex; align-items: center; gap: 14px;
+  background: #242424; border: 1px solid #383838; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 8px;
+  transition: border-color 0.1s;
+}
+.craft-card.cant-afford { opacity: 0.5; }
+.craft-card:not(.cant-afford):hover { border-color: #666; }
+.craft-swatch {
+  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  border: 3px solid rgba(255,255,255,0.15);
+}
+.craft-info { flex: 1; }
+.craft-name  { font-weight: 700; font-size: 13px; color: #fff; margin-bottom: 3px; }
+.craft-stats { font-size: 11px; color: #888; margin-bottom: 4px; }
+.craft-cost  { font-size: 11px; display:flex; gap:8px; }
+.cs { color:#9E9E9E; } .ci { color:#FF8F00; } .cd { color:#40C4FF; }
+.craft-right { display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; }
+.inv-badge { font-size:11px; color:#aaa; }
+.craft-btn {
+  padding: 6px 14px; border-radius: 7px; border: none;
+  background: #2E7D32; color: #fff; font-size: 12px; font-weight: bold;
+  cursor: pointer; font-family: inherit;
+}
+.craft-btn:hover:not(:disabled) { background: #388E3C; }
+.craft-btn:disabled { background: #333; color: #666; cursor: default; }
+#craftClose {
+  float:right; background:none; border:none; color:#888; font-size:20px;
+  cursor:pointer; padding: 0 4px; line-height:1;
+}
+#craftClose:hover { color:#fff; }
+
+/* ── Game over / victory overlay ── */
+#overlay {
+  position: absolute; top:0;left:0;right:0;bottom:0;
+  display:none; flex-direction:column; justify-content:center; align-items:center;
+  background:rgba(0,0,0,0.76); pointer-events:all;
+}
+#overlay h1 { font-size:52px; margin-bottom:12px; }
+#overlay p  { font-size:17px; margin-bottom:24px; color:#ccc; text-align:center; }
+#overlay button {
+  padding:12px 34px; font-size:15px; border:none; border-radius:10px;
+  background:#1565C0; color:#fff; cursor:pointer; font-family:inherit;
+}
+#overlay button:hover { background:#1976D2; }
+
+/* ── Tutorial ── */
+#tutorial {
+  position: absolute; top:60px; right:18px;
+  background:rgba(0,0,0,0.72); padding:10px 14px; border-radius:10px;
+  font-size:12px; line-height:2.0; color:#ccc;
+  border:1px solid rgba(255,255,255,0.07);
+}
+#tutorial b { color:#FFD700; }
+.ore-s{color:#9E9E9E;}.ore-i{color:#FF8F00;}.ore-d{color:#40C4FF;}.ore-p{color:#ECEFF1;}.ore-e{color:#69F0AE;}
+.cp{color:#ECEFF1;}.ce{color:#69F0AE;}
+#shopbtn {
+  position: absolute; bottom: 90px; left: 140px; pointer-events: all;
+  padding: 10px 18px; border: 2px solid #2E7D32; border-radius: 10px;
+  background: #1B5E20; color: #fff; font-size: 14px; font-weight: bold;
+  cursor: pointer; font-family: inherit; display: none;
+}
+#shopbtn:hover { background: #2E7D32; }
+.inv-ammo { position: absolute; bottom: 3px; left: 4px; font-size: 10px; font-weight: bold; color: #69F0AE; text-shadow: 0 0 4px #000; }
+
+/* ── Home page ── */
+#homepage {
+  position: fixed; top:0; left:0; width:100%; height:100%;
+  display:flex; flex-direction:column; justify-content:center; align-items:center;
+  background: radial-gradient(ellipse at 50% 60%, #0d1f0d 0%, #050d05 100%);
+  z-index: 9999; pointer-events:all;
+}
+#homepage h1 {
+  font-size: 62px; font-weight: 900; letter-spacing: 2px;
+  color: #fff; text-shadow: 0 0 40px #2e7d32, 0 2px 0 #000;
+  margin-bottom: 10px;
+}
+#homepage .subtitle {
+  font-size: 17px; color: #81C784; margin-bottom: 48px; letter-spacing: 1px;
+}
+#homepage .play-btn {
+  padding: 16px 56px; font-size: 20px; font-weight: bold; font-family: inherit;
+  border: 2px solid #4CAF50; border-radius: 14px;
+  background: #1B5E20; color: #fff; cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  box-shadow: 0 0 24px rgba(76,175,80,0.35);
+}
+#homepage .play-btn:hover { background: #2E7D32; transform: scale(1.04); }
+#homepage .info-grid {
+  display: flex; gap: 28px; margin-top: 40px;
+}
+#homepage .info-card {
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px; padding: 14px 20px; text-align: center; min-width: 110px;
+}
+#homepage .info-card .ic-icon { font-size: 26px; margin-bottom: 6px; }
+#homepage .info-card .ic-label { font-size: 11px; color: #aaa; }
+</style>
+</head>
+<body>
+<!-- Home page -->
+<div id="homepage">
+  <h1>⚔ Realistic Survival</h1>
+  <div class="subtitle">Mine. Build. Defend. Survive.</div>
+  <button class="play-btn" onclick="startGame()">▶ Play</button>
+  <div class="info-grid">
+    <div class="info-card"><div class="ic-icon">⛏</div><div class="ic-label">Mine ores</div></div>
+    <div class="info-card"><div class="ic-icon">🧱</div><div class="ic-label">Build walls</div></div>
+    <div class="info-card"><div class="ic-icon">🗡️</div><div class="ic-label">Fight enemies</div></div>
+    <div class="info-card"><div class="ic-icon">🌊</div><div class="ic-label">8 waves</div></div>
+    <div class="info-card"><div class="ic-icon">👑</div><div class="ic-label">Defeat the boss</div></div>
+  </div>
+</div>
+<canvas id="c"></canvas>
+<div id="hud" style="display:none">
+  <!-- Top HUD -->
+  <div id="topbar">
+    <div class="res">🪨 <span id="stoneEl">60</span></div>
+    <div class="res">⚙️ <span id="ironEl">0</span></div>
+    <div class="res">💎 <span id="diamondEl">0</span></div>
+    <div class="res">🔘 <span id="platinumEl">0</span></div>
+    <div class="res" style="color:#69F0AE">💚 <span id="emeraldEl">0</span></div>
+    <div class="res">🏰 <span id="baseHpEl">200</span> <span id="basebar"><span id="basefill" style="width:100%"></span></span></div>
+    <div class="res">🌊 Wave <span id="waveEl">0</span>/8</div>
+    <div class="res" id="phaseEl" style="color:#FFD700">PREP PHASE</div>
+  </div>
+
+  <!-- Inventory bar -->
+  <div id="toolbar">
+    <div class="inv-slot sel" id="inv-none" onclick="selectItem(null)" title="Mine mode (E)">
+      <span class="slot-icon">⛏</span>
+      <span class="slot-label">Mine</span>
+    </div>
+    <div class="inv-slot" id="inv-sword" onclick="toggleSwordMode()" title="Sword (Q)" style="display:none">
+      <span class="slot-icon" id="sword-icon">🗡️</span>
+      <span class="slot-label" id="sword-label">Sword</span>
+    </div>
+    <div class="inv-slot" id="inv-ranged" onclick="toggleRangedMode()" title="Ranged weapon (R)" style="display:none">
+      <span class="slot-icon" id="ranged-icon">🏹</span>
+      <span class="slot-label" id="ranged-label">Bow</span>
+      <span class="inv-ammo" id="ranged-ammo"></span>
+    </div>
+    <div class="inv-sep"></div>
+    <div class="inv-slot empty" id="inv-arrow"   onclick="selectItem('arrow')"   title="Arrow Tower">
+      <span class="inv-count" id="count-arrow">0</span>
+      <span class="slot-icon">🏹</span>
+      <span class="slot-label">Arrow</span>
+    </div>
+    <div class="inv-slot empty" id="inv-cannon"  onclick="selectItem('cannon')"  title="Cannon">
+      <span class="inv-count" id="count-cannon">0</span>
+      <span class="slot-icon">💣</span>
+      <span class="slot-label">Cannon</span>
+    </div>
+    <div class="inv-slot empty" id="inv-wall"    onclick="selectItem('wall')"    title="Wall">
+      <span class="inv-count" id="count-wall">0</span>
+      <span class="slot-icon">🧱</span>
+      <span class="slot-label">Wall</span>
+    </div>
+    <div class="inv-slot empty" id="inv-iwall"   onclick="selectItem('iwall')"   title="Iron Wall">
+      <span class="inv-count" id="count-iwall">0</span>
+      <span class="slot-icon">🔩</span>
+      <span class="slot-label">Iron Wall</span>
+    </div>
+    <div class="inv-slot empty" id="inv-sniper"  onclick="selectItem('sniper')"  title="Sniper Tower">
+      <span class="inv-count" id="count-sniper">0</span>
+      <span class="slot-icon">🎯</span>
+      <span class="slot-label">Sniper</span>
+    </div>
+    <div class="inv-slot empty" id="inv-crystal" onclick="selectItem('crystal')" title="Crystal Tower">
+      <span class="inv-count" id="count-crystal">0</span>
+      <span class="slot-icon">✨</span>
+      <span class="slot-label">Crystal</span>
+    </div>
+    <div class="inv-slot empty" id="inv-plasma"  onclick="selectItem('plasma')"  title="Plasma Tower">
+      <span class="inv-count" id="count-plasma">0</span>
+      <span class="slot-icon">⚡</span>
+      <span class="slot-label">Plasma</span>
+    </div>
+  </div>
+
+  <div id="wavetimer">Next wave in <span id="timerEl">25</span>s</div>
+  <button id="startbtn" onclick="startWave()">⚔ Start Wave</button>
+  <button id="craftbtn" onclick="openCraftMenu()" style="display:none">⚒ Open Craft</button>
+  <button id="shopbtn"  onclick="openShopMenu()">🛒 Shop</button>
+  <div id="waveinfo"></div>
+
+  <!-- Shop overlay -->
+  <div id="shopOverlay" onclick="handleShopOverlayClick(event)" style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:none;justify-content:center;align-items:center;pointer-events:all;">
+    <div id="shopModal" style="background:#1a1a1a;border:1px solid #444;border-radius:16px;padding:20px 24px;width:520px;max-height:80vh;overflow-y:auto;">
+      <button id="shopClose" onclick="closeShopMenu()" style="float:right;background:none;border:none;color:#888;font-size:20px;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
+      <h2 style="font-size:18px;margin-bottom:16px;color:#fff;">🛒 Merchant's Shop</h2>
+      <div style="font-size:12px;color:#69F0AE;margin-bottom:12px;">💚 Emeralds: <span id="shopEmeraldEl">0</span> &nbsp;— earned by defeating enemies</div>
+      <div id="shopGrid"></div>
+    </div>
+  </div>
+
+  <!-- Craft overlay -->
+  <div id="craftOverlay" onclick="handleCraftOverlayClick(event)">
+    <div id="craftModal">
+      <button id="craftClose" onclick="closeCraftMenu()">✕</button>
+      <h2>⚒ Craft at Base</h2>
+      <div id="craftGrid"></div>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div id="overlay">
+    <h1 id="overlayTitle"></h1>
+    <p  id="overlayMsg"></p>
+    <button onclick="restartGame()">Play Again</button>
+  </div>
+
+  <div id="tutorial">
+    <b>WASD</b> Move &nbsp; <b>Click</b> Mine ore<br>
+    <b>Near base</b> → click <b>⚒ Open Craft</b> button<br>
+    <b>Inventory</b> Click slot → click world to place<br>
+    <b>1–5</b> Select slot &nbsp; <b>E/Esc</b> Mine &nbsp; <b>Q</b> Sword &nbsp; <b>R</b> Bow<br>
+    <b>💚 Emeralds</b> dropped by enemies → spend at Shop (north)<br>
+    <span class="ore-s">■</span> Stone &nbsp; <span class="ore-i">■</span> Iron &nbsp; <span class="ore-d">■</span> Diamond<br>
+    <span class="ore-d">◆ Diamond needs iron pickaxe!</span><br>
+    <span class="ore-p">⬤ Platinum needs diamond pickaxe!</span>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const CW = 1200, CH = 700;
+const WW = 2600, WH = 2200;
+const GRID = 64;
+const BASE_INTERACT_RANGE = 160;
+
+const BTYPE = {
+  arrow:   { name:'Arrow Tower',  cost:{stone:15},                     range:220, dmg:5,   rate:1.1,  col:'#8D6E63', pcol:'#FFD740', pspd:340, aoe:0,   hp:50,  sz:16, desc:'Fast, reliable. Good all-rounder.' },
+  cannon:  { name:'Cannon',       cost:{stone:20, iron:8},             range:175, dmg:20,  rate:0.4,  col:'#546E7A', pcol:'#FF8F00', pspd:200, aoe:78,  hp:70,  sz:18, desc:'Slow area blast. Destroys clusters.' },
+  wall:    { name:'Wall',         cost:{stone:6},                      range:0,   dmg:0,   rate:0,    col:'#78909C', pcol:null,      pspd:0,   aoe:0,   hp:110, sz:20, desc:'Absorbs hits. Forces enemies to detour.' },
+  iwall:   { name:'Iron Wall',    cost:{stone:4, iron:4},              range:0,   dmg:0,   rate:0,    col:'#455A64', pcol:null,      pspd:0,   aoe:0,   hp:320, sz:20, desc:'Heavy iron-plated wall. Much more durable.' },
+  sniper:  { name:'Sniper Tower', cost:{stone:15, iron:5, diamond:2},  range:400, dmg:85,  rate:0.28, col:'#2E7D32', pcol:'#B9F6CA', pspd:760, aoe:0,   hp:35,  sz:15, desc:'Long range, high single-target damage.' },
+  crystal: { name:'Crystal Tower',cost:{stone:10, iron:8, diamond:3},  range:265, dmg:30,  rate:1.8,  col:'#00838F', pcol:'#80DEEA', pspd:500, aoe:0,   hp:45,  sz:16, desc:'Rapid fire. Chains to nearby enemies.', chain:true },
+  plasma:  { name:'Plasma Tower', cost:{stone:25, iron:15, diamond:4, platinum:2}, range:300, dmg:120, rate:0.6, col:'#7B1FA2', pcol:'#CE93D8', pspd:380, aoe:100, hp:60, sz:18, desc:'Devastating plasma burst. Requires platinum.' },
+};
+
+const ETYPE = {
+  goblin:  { hp:40,   spd:68,  dmg:10, rwd:6,  col:'#66BB6A', sz:12, atkspd:0.8 },
+  runner:  { hp:25,   spd:160, dmg:6,  rwd:9,  col:'#EF5350', sz:9,  atkspd:0.6 },
+  orc:     { hp:130,  spd:42,  dmg:25, rwd:15, col:'#FFA726', sz:20, atkspd:1.2 },
+  troll:   { hp:380,  spd:22,  dmg:55, rwd:40, col:'#CE93D8', sz:28, atkspd:2.0 },
+  boss:    { hp:3800, spd:15,  dmg:120,rwd:200,col:'#FF1744', sz:46, atkspd:2.5 },
+};
+
+const WAVES = [
+  [{ t:'goblin', n:6,  gap:1.5 }],
+  [{ t:'goblin', n:8,  gap:1.2 }, { t:'runner', n:4,  gap:0.7 }],
+  [{ t:'goblin', n:10, gap:1.0 }, { t:'orc',    n:3,  gap:2.0 }],
+  [{ t:'runner', n:10, gap:0.5 }, { t:'orc',    n:5,  gap:1.5 }],
+  [{ t:'goblin', n:12, gap:0.9 }, { t:'orc',    n:6,  gap:1.2 }, { t:'troll', n:1, gap:0 }],
+  [{ t:'runner', n:14, gap:0.5 }, { t:'orc',    n:7,  gap:1.0 }, { t:'troll', n:2, gap:4 }],
+  [{ t:'goblin', n:15, gap:0.8 }, { t:'orc',    n:9,  gap:0.9 }, { t:'troll', n:3, gap:3 }],
+  [{ t:'runner', n:20, gap:0.4 }, { t:'orc', n:12, gap:0.7 }, { t:'troll', n:6, gap:2 }, { t:'boss', n:1, gap:8 }],
+];
+
+const SPAWNS = [
+  { x:200,    y:200    }, { x:WW-200, y:200    },
+  { x:200,    y:WH-200 }, { x:WW-200, y:WH-200 },
+];
+
+// Seconds per pickaxe swing per ore type
+const MINE_TIMES = { stone: 0.65, iron: 1.4, diamond: 2.8, platinum: 5.0 };
+
+const STYPE = {
+  stone:   { name:'Stone Sword',   cost:{stone:10},  dmg:18, range:58, cd:0.75, col:'#B0BEC5' },
+  iron:    { name:'Iron Sword',    cost:{iron:6},    dmg:40, range:62, cd:0.60, col:'#90CAF9' },
+  diamond: { name:'Diamond Sword', cost:{diamond:4}, dmg:90, range:68, cd:0.45, col:'#40C4FF' },
+};
+
+const SHOP = { x: WW/2, y: 340, w: 90, h: 72 };
+const SHOP_INTERACT_RANGE = 150;
+
+const RTYPE = {
+  bow:      { name:'Bow',      ammo:'arrow',  dmg:30,  range:340, cd:0.7,  col:'#A1887F', pspd:500, price:16  },
+  crossbow: { name:'Crossbow', ammo:'bolt',   dmg:65,  range:440, cd:1.3,  col:'#546E7A', pspd:720, price:20 },
+  pistol:   { name:'Pistol',   ammo:'bullet', dmg:22,  range:300, cd:0.35, col:'#78909C', pspd:620, price:100 },
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let stone, iron, diamond, platinum, emerald;
+let ammo; // { arrow:N, bolt:N }
+let inventory; // { arrow:N, ... }
+let selectedItem;
+let craftMenuOpen;
+let waveIdx, phase, prepTime, spawnQueue, spawnTimer;
+let base, player, camera;
+let towers, enemies, projectiles, particles, rocks, trees;
+let floatTexts;
+let screenShake;
+let gridOccupied;
+let swordMode;
+let rangedMode;
+let shopMenuOpen;
+const keys = {};
+const mouse = { wx:0, wy:0, down:false };
+let lastTime = 0;
+
+function initState() {
+  stone=60; iron=0; diamond=0; platinum=0; emerald=0;
+  ammo = { arrow:0, bolt:0, bullet:0 };
+  inventory = { arrow:0, cannon:0, wall:0, iwall:0, sniper:0, crystal:0, plasma:0 };
+  selectedItem = null;
+  craftMenuOpen = false; shopMenuOpen = false;
+  waveIdx=0; phase='prep'; prepTime=25;
+  spawnQueue=[]; spawnTimer=0; screenShake=0;
+  base   = { x:WW/2, y:WH/2, w:80, h:80, hp:200, maxHp:200 };
+  player = { x:WW/2, y:WH/2+180, spd:195, angle:0, mineTarget:null, mineTimer:0, pickaxe:'stone',
+             sword:null, swordTimer:0, swingAnim:0, swingAngle:0,
+             rangedWeapon:null, rangedTimer:0 };
+  swordMode=false; rangedMode=false;
+  camera = { x:WW/2-CW/2, y:WH/2-CH/2 };
+  towers=[]; enemies=[]; projectiles=[]; particles=[]; floatTexts=[];
+  gridOccupied = new Set();
+  genWorld();
+}
+
+function genWorld() {
+  rocks=[]; trees=[];
+  const bx=WW/2, by=WH/2, SAFE=310;
+  placeOreNodes('stone',   22, 80, 28, 10, 4, bx, by, SAFE);
+  placeOreNodes('iron',    9,  80, 22, 8,  3, bx, by, SAFE);
+  placeOreNodes('diamond', 4,  90, 18, 6,  2, bx, by, SAFE+80);
+  placeOreNodes('platinum',2, 150, 22, 8,  3, bx, by, SAFE+220);
+  for (let i=0; i<70; i++) {
+    const x=80+Math.random()*(WW-160), y=80+Math.random()*(WH-160);
+    if (hypot2(x-bx,y-by)<SAFE+50) continue;
+    trees.push({ x, y, r:11+Math.random()*8, col:['#2d5a1b','#3d6b24','#4a7a2c'][0|(Math.random()*3)] });
+  }
+}
+
+function placeOreNodes(kind, count, minSep, maxR, minR, maxHp, bx, by, safeR) {
+  let tries=0;
+  while (rocks.filter(r=>r.kind===kind).length<count && tries<3000) {
+    tries++;
+    const x=160+Math.random()*(WW-320), y=160+Math.random()*(WH-320);
+    if (hypot2(x-bx,y-by)<safeR) continue;
+    let ok=true;
+    for (const r of rocks) if (hypot2(r.x-x,r.y-y)<minSep) { ok=false; break; }
+    if (!ok) continue;
+    const r=minR+Math.random()*(maxR-minR);
+    rocks.push({ kind, x, y, hp:maxHp, maxHp, r, respawn:0, seed:Math.random() });
+  }
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+const hypot2 = (dx,dy)  => Math.sqrt(dx*dx+dy*dy);
+const dist   = (a,b)    => hypot2(a.x-b.x, a.y-b.y);
+const clamp  = (v,lo,hi)=> Math.max(lo, Math.min(hi, v));
+const lerp   = (a,b,t)  => a+(b-a)*t;
+const rand   = (lo,hi)  => lo+Math.random()*(hi-lo);
+const randInt= (lo,hi)  => 0|(lo+Math.random()*(hi-lo));
+
+function worldToCell(wx,wy) { return { col: Math.floor(wx/GRID), row: Math.floor(wy/GRID) }; }
+function cellToWorld(col,row) { return { x: col*GRID+GRID/2, y: row*GRID+GRID/2 }; }
+function cellKey(col,row) { return col+','+row; }
+
+function canAfford(cost) {
+  return (stone>=(cost.stone||0)) && (iron>=(cost.iron||0)) && (diamond>=(cost.diamond||0)) && (platinum>=(cost.platinum||0));
+}
+function deductCost(cost) {
+  stone    -= (cost.stone    ||0);
+  iron     -= (cost.iron     ||0);
+  diamond  -= (cost.diamond  ||0);
+  platinum -= (cost.platinum ||0);
+}
+function addParticle(x,y,vx,vy,col,sz,life) {
+  if (particles.length>500) return;
+  particles.push({ x,y,vx,vy,col,sz,life,maxLife:life });
+}
+function addFloatText(x,y,text,col='#fff') {
+  // Deduplicate: don't spam the same text
+  if (floatTexts.some(f=>f.text===text&&f.life>1.5)) return;
+  floatTexts.push({ x, y, text, col, life:2.2, maxLife:2.2 });
+}
+function playerNearBase() {
+  return hypot2(player.x-base.x, player.y-base.y) <= BASE_INTERACT_RANGE;
+}
+
+// ============================================================
+// CRAFTING
+// ============================================================
+function openCraftMenu() {
+  craftMenuOpen = true;
+  document.getElementById('craftOverlay').style.display = 'flex';
+  renderCraftMenu();
+}
+function closeCraftMenu() {
+  craftMenuOpen = false;
+  document.getElementById('craftOverlay').style.display = 'none';
+}
+function handleCraftOverlayClick(ev) {
+  if (ev.target === document.getElementById('craftOverlay')) closeCraftMenu();
+}
+
+function renderCraftMenu() {
+  const grid = document.getElementById('craftGrid');
+  grid.innerHTML = '';
+
+  // ── Tools section ──
+  const toolHeader = document.createElement('div');
+  toolHeader.style.cssText = 'font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;';
+  toolHeader.textContent = 'Tools';
+  grid.appendChild(toolHeader);
+
+  const hasIronPick    = player.pickaxe === 'iron' || player.pickaxe === 'diamond';
+  const hasDiamondPick = player.pickaxe === 'diamond';
+  const ironPickAfford = canAfford({ iron: 5 });
+  const diaPickAfford  = canAfford({ diamond: 3 });
+
+  const ironPickCard = document.createElement('div');
+  ironPickCard.className = 'craft-card' + (!ironPickAfford && !hasIronPick ? ' cant-afford' : '');
+  ironPickCard.innerHTML = `
+    <div class="craft-swatch" style="background:${hasIronPick?'#FF8F00':'#90A4AE'};border-color:${hasIronPick?'#FFA040':'rgba(255,255,255,0.15)'}"></div>
+    <div class="craft-info">
+      <div class="craft-name">${hasIronPick ? '✓ Iron Pickaxe' : 'Iron Pickaxe'}</div>
+      <div class="craft-stats">Required to mine diamond ore</div>
+      <div class="craft-cost"><span class="ci">5⚙️</span></div>
+    </div>
+    <div class="craft-right">
+      <span class="inv-badge">${hasIronPick ? 'Owned' : 'Not owned'}</span>
+      <button class="craft-btn" onclick="craftPickaxe('iron')" ${hasIronPick || !ironPickAfford ? 'disabled' : ''}>${hasIronPick ? 'Crafted' : 'Craft'}</button>
+    </div>`;
+  grid.appendChild(ironPickCard);
+
+  const diaPickCard = document.createElement('div');
+  diaPickCard.className = 'craft-card' + (!diaPickAfford && !hasDiamondPick ? ' cant-afford' : '');
+  diaPickCard.innerHTML = `
+    <div class="craft-swatch" style="background:${hasDiamondPick?'#40C4FF':'#546E7A'};border-color:${hasDiamondPick?'#80DEEA':'rgba(255,255,255,0.15)'}"></div>
+    <div class="craft-info">
+      <div class="craft-name">${hasDiamondPick ? '✓ Diamond Pickaxe' : 'Diamond Pickaxe'}</div>
+      <div class="craft-stats">Required to mine platinum ore · Requires iron pickaxe first</div>
+      <div class="craft-cost"><span class="cd">3💎</span></div>
+    </div>
+    <div class="craft-right">
+      <span class="inv-badge">${hasDiamondPick ? 'Owned' : 'Not owned'}</span>
+      <button class="craft-btn" onclick="craftPickaxe('diamond')" ${hasDiamondPick || !hasIronPick || !diaPickAfford ? 'disabled' : ''}>${hasDiamondPick ? 'Crafted' : (!hasIronPick ? 'Need iron' : 'Craft')}</button>
+    </div>`;
+  grid.appendChild(diaPickCard);
+
+  // ── Towers section ──
+  const towerHeader = document.createElement('div');
+  towerHeader.style.cssText = 'font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px;';
+  towerHeader.textContent = 'Towers';
+  grid.appendChild(towerHeader);
+
+  for (const [type, bt] of Object.entries(BTYPE)) {
+    const afford = canAfford(bt.cost);
+    const card = document.createElement('div');
+    card.className = 'craft-card' + (afford ? '' : ' cant-afford');
+
+    const costHtml = [
+      bt.cost.stone    ? `<span class="cs">${bt.cost.stone}🪨</span>`    : '',
+      bt.cost.iron     ? `<span class="ci">${bt.cost.iron}⚙️</span>`     : '',
+      bt.cost.diamond  ? `<span class="cd">${bt.cost.diamond}💎</span>`  : '',
+      bt.cost.platinum ? `<span class="cp">${bt.cost.platinum}🔘</span>` : '',
+    ].filter(Boolean).join(' ');
+
+    card.innerHTML = `
+      <div class="craft-swatch" style="background:${bt.col}"></div>
+      <div class="craft-info">
+        <div class="craft-name">${bt.name}</div>
+        <div class="craft-stats">Range ${bt.range} · DMG ${bt.dmg} · ${bt.rate}/s</div>
+        <div class="craft-cost">${costHtml}</div>
+        <div class="craft-stats" style="margin-top:2px;color:#666">${bt.desc}</div>
+      </div>
+      <div class="craft-right">
+        <span class="inv-badge">In bag: ${inventory[type]}</span>
+        <button class="craft-btn" onclick="craftItem('${type}')" ${afford?'':'disabled'}>Craft</button>
+      </div>`;
+    grid.appendChild(card);
+  }
+
+  // ── Weapons section ──
+  const weaponHeader = document.createElement('div');
+  weaponHeader.style.cssText = 'font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px;';
+  weaponHeader.textContent = 'Weapons';
+  grid.appendChild(weaponHeader);
+
+  for (const [tier, st] of Object.entries(STYPE)) {
+    const owned  = player.sword === tier;
+    const afford = canAfford(st.cost);
+    const card   = document.createElement('div');
+    card.className = 'craft-card' + (!afford && !owned ? ' cant-afford' : '');
+    const costHtml = [
+      st.cost.stone   ? `<span class="cs">${st.cost.stone}🪨</span>`   : '',
+      st.cost.iron    ? `<span class="ci">${st.cost.iron}⚙️</span>`    : '',
+      st.cost.diamond ? `<span class="cd">${st.cost.diamond}💎</span>` : '',
+    ].filter(Boolean).join(' ');
+    card.innerHTML = `
+      <div class="craft-swatch" style="background:${owned?st.col:'#2a2a2a'};border-color:${owned?st.col:'rgba(255,255,255,0.12)'}"></div>
+      <div class="craft-info">
+        <div class="craft-name">${owned?'✓ ':''}${st.name}</div>
+        <div class="craft-stats">DMG ${st.dmg} · Range ${st.range} · ${st.cd}s cooldown</div>
+        <div class="craft-cost">${costHtml}</div>
+        <div class="craft-stats" style="margin-top:2px;color:#666">Hold click to swing. Hits enemies in front of you.</div>
+      </div>
+      <div class="craft-right">
+        <span class="inv-badge">${owned ? 'Equipped' : 'Not owned'}</span>
+        <button class="craft-btn" onclick="craftSword('${tier}')" ${owned || !afford ? 'disabled' : ''}>${owned ? 'Equipped' : 'Craft'}</button>
+      </div>`;
+    grid.appendChild(card);
+  }
+}
+
+function craftItem(type) {
+  const bt = BTYPE[type];
+  if (!canAfford(bt.cost)) return;
+  deductCost(bt.cost);
+  inventory[type]++;
+  renderCraftMenu();
+  updateHUD();
+}
+
+function craftPickaxe(tier) {
+  if (tier === 'iron') {
+    const cost = { iron: 5 };
+    if (player.pickaxe === 'iron' || player.pickaxe === 'diamond' || !canAfford(cost)) return;
+    deductCost(cost);
+    player.pickaxe = 'iron';
+  } else if (tier === 'diamond') {
+    const cost = { diamond: 3 };
+    if (player.pickaxe !== 'iron' || !canAfford(cost)) return;
+    deductCost(cost);
+    player.pickaxe = 'diamond';
+  }
+  renderCraftMenu();
+  updateHUD();
+}
+
+// ============================================================
+// SHOP
+// ============================================================
+function playerNearShop() {
+  return hypot2(player.x-SHOP.x, player.y-SHOP.y) <= SHOP_INTERACT_RANGE;
+}
+function openShopMenu() {
+  shopMenuOpen = true;
+  document.getElementById('shopOverlay').style.display = 'flex';
+  renderShopMenu();
+}
+function closeShopMenu() {
+  shopMenuOpen = false;
+  document.getElementById('shopOverlay').style.display = 'none';
+}
+function handleShopOverlayClick(ev) {
+  if (ev.target === document.getElementById('shopOverlay')) closeShopMenu();
+}
+
+function renderShopMenu() {
+  document.getElementById('shopEmeraldEl').textContent = emerald;
+  const grid = document.getElementById('shopGrid');
+  grid.innerHTML = '';
+
+  const sections = [
+    { label: 'Ranged Weapons', items: [
+      { id:'bow',      icon:'🏹', name:'Bow',      desc:'Shoots arrows. Hold click, aim with mouse.',       price:16,  action:()=>buyWeapon('bow') },
+      { id:'pistol',   icon:'🔫', name:'Pistol',   desc:'Fast fire rate. Shoots bullets.',                  price:100, action:()=>buyWeapon('pistol') },
+      { id:'crossbow', icon:'🏹', name:'Crossbow', desc:'Slower but hits hard and far.',                    price:20,  action:()=>buyWeapon('crossbow') },
+    ]},
+    { label: 'Ammo', items: [
+      { id:'arrow10',  icon:'↗', name:'2 Arrows',   desc:'Ammo for Bow.',      price:1,  action:()=>buyAmmo('arrow',2)   },
+      { id:'bullet10', icon:'•', name:'10 Bullets', desc:'Ammo for Pistol.',   price:20, action:()=>buyAmmo('bullet',10) },
+      { id:'bolt10',   icon:'⚡', name:'1 Bolt',     desc:'Ammo for Crossbow.', price:1,  action:()=>buyAmmo('bolt',1)    },
+    ]},
+  ];
+
+  for (const sec of sections) {
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px;margin:10px 0 6px;';
+    hdr.textContent = sec.label;
+    grid.appendChild(hdr);
+
+    for (const item of sec.items) {
+      const canBuy = emerald >= item.price;
+      const owned  = player.rangedWeapon === item.id;
+      const card = document.createElement('div');
+      card.className = 'craft-card' + (canBuy ? '' : ' cant-afford');
+      card.innerHTML = `
+        <div class="craft-swatch" style="background:#1c2a1c;font-size:22px;display:flex;align-items:center;justify-content:center;">${item.icon}</div>
+        <div class="craft-info">
+          <div class="craft-name">${owned?'✓ ':''}${item.name}</div>
+          <div class="craft-stats">${item.desc}</div>
+          <div class="craft-cost"><span class="ce">${item.price}💚</span></div>
+        </div>
+        <div class="craft-right">
+          <span class="inv-badge">${owned?'Owned':('Have: '+(item.id==='arrow10'?ammo.arrow:item.id==='bullet10'?ammo.bullet:item.id==='bolt10'?ammo.bolt:''))}</span>
+          <button class="craft-btn" ${owned||!canBuy?'disabled':''}>${owned?'Owned':'Buy'}</button>
+        </div>`;
+      card.querySelector('.craft-btn').addEventListener('click', item.action);
+      grid.appendChild(card);
+    }
+  }
+}
+
+function buyWeapon(type) {
+  const price = RTYPE[type].price;
+  if (emerald < price) return;
+  emerald -= price;
+  player.rangedWeapon = type;
+  rangedMode = true;
+  selectItem(null); swordMode = false;
+  closeShopMenu(); updateHUD();
+}
+function buyAmmo(type, qty) {
+  const prices = { arrow:1, bolt:1, bullet:20 };
+  const price = prices[type];
+  if (emerald < price) return;
+  emerald -= price;
+  ammo[type] += qty;
+  renderShopMenu(); updateHUD();
+}
+function buyOre(gives) {
+  const prices = { iron:3, diamond:6, platinum:12 };
+  const key = Object.keys(gives)[0];
+  const price = prices[key];
+  if (emerald < price) return;
+  emerald -= price;
+  if (gives.iron)     iron     += gives.iron;
+  if (gives.diamond)  diamond  += gives.diamond;
+  if (gives.platinum) platinum += gives.platinum;
+  renderShopMenu(); updateHUD();
+}
+
+// ============================================================
+
+function craftSword(tier) {
+  const st = STYPE[tier];
+  if (!canAfford(st.cost)) return;
+  deductCost(st.cost);
+  player.sword = tier;
+  swordMode = true;
+  selectItem(null);
+  closeCraftMenu();
+  updateHUD();
+}
+
+function toggleRangedMode() {
+  if (!player.rangedWeapon) return;
+  rangedMode = !rangedMode;
+  if (rangedMode) { selectItem(null); swordMode = false; }
+  updateHUD();
+}
+
+function updateRanged(dt) {
+  if (player.rangedTimer > 0) player.rangedTimer -= dt;
+  if (!rangedMode || !player.rangedWeapon) return;
+  if (!mouse.down || player.rangedTimer > 0) return;
+  const rt = RTYPE[player.rangedWeapon];
+  if (ammo[rt.ammo] <= 0) { addFloatText(player.x, player.y-30, 'No '+rt.ammo+'s!', '#FF5252'); player.rangedTimer=0.8; return; }
+  ammo[rt.ammo]--;
+  player.rangedTimer = rt.cd;
+  // Find nearest enemy near cursor to home on, else fly straight
+  let target = null, bestD = rt.range;
+  for (const e of enemies) { const d=hypot2(e.x-mouse.wx,e.y-mouse.wy); if(d<bestD){target=e;bestD=d;} }
+  const ang = Math.atan2(mouse.wy-player.y, mouse.wx-player.x);
+  projectiles.push({ x:player.x, y:player.y, vx:Math.cos(ang)*rt.pspd, vy:Math.sin(ang)*rt.pspd,
+    dmg:rt.dmg, aoe:0, col:rt.col==='#546E7A'?'#90CAF9':'#FFD740', target, chain:false });
+  for (let k=0;k<4;k++) addParticle(player.x,player.y,Math.cos(ang)*rand(20,60),Math.sin(ang)*rand(20,60),rt.col,rand(2,4),0.2);
+}
+
+function toggleSwordMode() {
+  if (!player.sword) return;
+  swordMode = !swordMode;
+  if (swordMode) selectItem(null);
+  updateHUD();
+}
+
+function updateSword(dt) {
+  if (player.swordTimer > 0) player.swordTimer -= dt;
+  if (player.swingAnim > 0) player.swingAnim = Math.max(0, player.swingAnim - dt * 5);
+  if (!swordMode || !player.sword) return;
+  if (mouse.down && player.swordTimer <= 0) {
+    const st = STYPE[player.sword];
+    player.swordTimer = st.cd;
+    player.swingAnim = 1.0;
+    player.swingAngle = player.angle;
+    const sweep = Math.PI * 0.85;
+    for (const e of enemies) {
+      if (hypot2(e.x-player.x, e.y-player.y) > st.range) continue;
+      let diff = Math.atan2(e.y-player.y, e.x-player.x) - player.angle;
+      while (diff >  Math.PI) diff -= 2*Math.PI;
+      while (diff < -Math.PI) diff += 2*Math.PI;
+      if (Math.abs(diff) > sweep/2) continue;
+      damageEnemy(e, st.dmg);
+      for (let k=0;k<7;k++) addParticle(e.x,e.y,rand(-70,70),rand(-90,-10),st.col,rand(2,5),rand(0.2,0.5));
+    }
+  }
+}
+
+// ============================================================
+// ITEM SELECTION (inventory)
+// ============================================================
+function selectItem(type) {
+  // Can only select a tower if we have one in inventory
+  if (type !== null && inventory[type] <= 0) return;
+  if (type !== null) { swordMode = false; rangedMode = false; }
+  selectedItem = type;
+  document.querySelectorAll('.inv-slot').forEach(s => s.classList.remove('sel'));
+  document.getElementById(type ? 'inv-'+type : 'inv-none')?.classList.add('sel');
+}
+
+// ============================================================
+// UPDATE
+// ============================================================
+function update(dt) {
+  if (phase==='gameover'||phase==='victory') return;
+  updatePlayer(dt);
+  updateMining(dt);
+  updateSword(dt);
+  updateRanged(dt);
+  updateRocks(dt);
+  if (phase==='prep') updatePrepTimer(dt);
+  else if (phase==='wave') {
+    updateWaveSpawn(dt);
+    if (enemies.length===0 && spawnQueue.length===0) waveComplete();
+  }
+  updateEnemies(dt);
+  updateTowers(dt);
+  updateProjectiles(dt);
+  updateParticles(dt);
+  updateFloatTexts(dt);
+  updateCamera();
+  if (screenShake>0) screenShake=Math.max(0,screenShake-dt*7);
+  updateHUD();
+}
+
+function updatePlayer(dt) {
+  let dx=0, dy=0;
+  if (keys['KeyW']||keys['ArrowUp'])    dy-=1;
+  if (keys['KeyS']||keys['ArrowDown'])  dy+=1;
+  if (keys['KeyA']||keys['ArrowLeft'])  dx-=1;
+  if (keys['KeyD']||keys['ArrowRight']) dx+=1;
+  if (dx&&dy) { dx*=0.707; dy*=0.707; }
+  player.x=clamp(player.x+dx*player.spd*dt,20,WW-20);
+  player.y=clamp(player.y+dy*player.spd*dt,20,WH-20);
+  player.angle=Math.atan2(mouse.wy-player.y, mouse.wx-player.x);
+}
+
+function updateMining(dt) {
+  if (selectedItem !== null) { player.mineTarget=null; return; }
+  if (craftMenuOpen) { player.mineTarget=null; return; }
+  if (swordMode) { player.mineTarget=null; return; }
+  if (rangedMode) { player.mineTarget=null; return; }
+  if (mouse.down && !player.mineTarget) {
+    let best=null, bestD=Infinity;
+    for (const r of rocks) {
+      if (r.hp<=0) continue;
+      const dM=hypot2(r.x-mouse.wx,r.y-mouse.wy);
+      const dP=hypot2(r.x-player.x,r.y-player.y);
+      if ((dM<r.r+12||dP<r.r+65) && dP<bestD) {
+        // Block diamond if player only has stone pickaxe
+        if (r.kind==='diamond' && player.pickaxe!=='iron' && player.pickaxe!=='diamond') {
+          addFloatText(r.x, r.y-r.r-20, '⛏ Need iron pickaxe!', '#FF5252');
+          continue;
+        }
+        if (r.kind==='platinum' && player.pickaxe!=='diamond') {
+          addFloatText(r.x, r.y-r.r-20, '⛏ Need diamond pickaxe!', '#CE93D8');
+          continue;
+        }
+        best=r; bestD=dP;
+      }
+    }
+    player.mineTarget=best;
+  }
+  if (!mouse.down) { player.mineTarget=null; player.mineTimer=0; return; }
+  const r=player.mineTarget;
+  if (!r) return;
+  if (r.hp<=0) { player.mineTarget=null; return; }
+  if (hypot2(r.x-player.x,r.y-player.y)>r.r+110) { player.mineTarget=null; return; }
+  const mineTime = MINE_TIMES[r.kind] || 0.65;
+  player.mineTimer+=dt;
+  if (player.mineTimer>=mineTime) {
+    player.mineTimer=0; r.hp--;
+    let pCol;
+    if      (r.kind==='iron')     { iron+=5;     pCol='#FF8F00'; }
+    else if (r.kind==='diamond')  { diamond+=2;  pCol='#40C4FF'; }
+    else if (r.kind==='platinum') { platinum+=1; pCol='#ECEFF1'; }
+    else                           { stone+=10;  pCol='#B0BEC5'; }
+    for (let i=0;i<9;i++) addParticle(r.x+rand(-8,8),r.y+rand(-8,8),rand(-65,65),rand(-130,-20),pCol,rand(3,6),rand(0.4,0.9));
+    if (r.hp<=0) { r.respawn=35; player.mineTarget=null; }
+  }
+}
+
+function updateRocks(dt) {
+  for (const r of rocks) {
+    if (r.hp<=0&&r.respawn>0) { r.respawn-=dt; if (r.respawn<=0) r.hp=r.maxHp; }
+  }
+}
+function updatePrepTimer(dt) { prepTime-=dt; if (prepTime<=0) startWave(); }
+
+function updateWaveSpawn(dt) {
+  if (!spawnQueue.length) return;
+  spawnTimer+=dt;
+  while (spawnQueue.length>0 && spawnQueue[0].time<=spawnTimer) spawnEnemy(spawnQueue.shift().type, spawnQueue.shift ? 0 : 0);
+}
+
+// Fix: proper spawn with correct sp field
+function updateWaveSpawn(dt) {
+  if (!spawnQueue.length) return;
+  spawnTimer+=dt;
+  while (spawnQueue.length>0 && spawnQueue[0].time<=spawnTimer) {
+    const entry=spawnQueue.shift();
+    spawnEnemy(entry.type, entry.sp);
+  }
+}
+
+function spawnEnemy(type, spIdx) {
+  const sp=SPAWNS[spIdx], et=ETYPE[type];
+  enemies.push({ type, x:sp.x+rand(-35,35), y:sp.y+rand(-35,35),
+    hp:et.hp, maxHp:et.hp, spd:et.spd, dmg:et.dmg, rwd:et.rwd,
+    col:et.col, sz:et.sz, atkspd:et.atkspd, atkTimer:0, angle:0, hitFlash:0 });
+}
+
+function updateEnemies(dt) {
+  for (let i=enemies.length-1; i>=0; i--) {
+    const e=enemies[i];
+    if (e.hitFlash>0) e.hitFlash-=dt;
+    if (e.hp<=0) {
+      emerald+=e.rwd;
+      addFloatText(e.x, e.y-e.sz-18, '+'+e.rwd+'💚', '#69F0AE');
+      for (let j=0;j<12;j++) addParticle(e.x,e.y,rand(-80,80),rand(-90,30),e.col,rand(3,7),rand(0.3,0.8));
+      enemies.splice(i,1); continue;
+    }
+    let blockTarget=null, blockDist=Infinity;
+    for (const t of towers) { const d=dist(e,t); if (d<e.sz+t.sz+6&&d<blockDist) { blockTarget=t; blockDist=d; } }
+    if (blockTarget) {
+      e.atkTimer+=dt;
+      if (e.atkTimer>=e.atkspd) { e.atkTimer=0; damageTower(blockTarget,e.dmg); }
+    } else {
+      const bd=hypot2(e.x-base.x,e.y-base.y);
+      if (bd<62) { e.atkTimer+=dt; if (e.atkTimer>=e.atkspd) { e.atkTimer=0; damageBase(e.dmg); } }
+      else { const a=Math.atan2(base.y-e.y,base.x-e.x); e.angle=a; e.x+=Math.cos(a)*e.spd*dt; e.y+=Math.sin(a)*e.spd*dt; }
+    }
+  }
+}
+
+function updateTowers(dt) {
+  for (const t of towers) {
+    const bt=BTYPE[t.type]; if (!bt.range) continue;
+    t.cooldown=(t.cooldown||0)-dt; if (t.cooldown>0) continue;
+    let best=null, bestD=bt.range;
+    for (const e of enemies) { const d=dist(t,e); if (d<bestD) { best=e; bestD=d; } }
+    if (!best) continue;
+    const ang=Math.atan2(best.y-t.y,best.x-t.x); t.angle=ang;
+    projectiles.push({ x:t.x,y:t.y, vx:Math.cos(ang)*bt.pspd, vy:Math.sin(ang)*bt.pspd,
+      dmg:bt.dmg, aoe:bt.aoe, col:bt.pcol, target:best, chain:bt.chain||false });
+    t.cooldown=1/bt.rate;
+    addParticle(t.x,t.y,rand(-15,15),rand(-25,-5),bt.pcol||'#fff',rand(2,4),0.18);
+  }
+}
+
+function updateProjectiles(dt) {
+  for (let i=projectiles.length-1; i>=0; i--) {
+    const p=projectiles[i];
+    p.x+=p.vx*dt; p.y+=p.vy*dt;
+    if (p.x<-50||p.x>WW+50||p.y<-50||p.y>WH+50) { projectiles.splice(i,1); continue; }
+    if (p.target&&p.target.hp>0) {
+      const ang=Math.atan2(p.target.y-p.y,p.target.x-p.x);
+      let cur=Math.atan2(p.vy,p.vx), diff=ang-cur;
+      while(diff>Math.PI)diff-=2*Math.PI; while(diff<-Math.PI)diff+=2*Math.PI;
+      cur+=diff*dt*5; const spd=hypot2(p.vx,p.vy); p.vx=Math.cos(cur)*spd; p.vy=Math.sin(cur)*spd;
+    }
+    let hit=false;
+    for (const e of enemies) {
+      if (hypot2(p.x-e.x,p.y-e.y)<e.sz+5) {
+        if (p.aoe>0) {
+          for (const e2 of enemies) if (hypot2(p.x-e2.x,p.y-e2.y)<p.aoe) damageEnemy(e2,p.dmg);
+          for (let k=0;k<18;k++) addParticle(p.x,p.y,rand(-130,130),rand(-130,130),p.col,rand(3,7),rand(0.3,0.7));
+          screenShake=Math.min(screenShake+0.5,1.2);
+        } else {
+          damageEnemy(e,p.dmg);
+          for (let k=0;k<5;k++) addParticle(p.x,p.y,rand(-50,50),rand(-50,50),p.col,rand(2,4),rand(0.2,0.5));
+          if (p.chain) {
+            let ct=null, cd=110;
+            for (const e2 of enemies) { if (e2===e) continue; const d2=hypot2(p.x-e2.x,p.y-e2.y); if (d2<cd) { ct=e2; cd=d2; } }
+            if (ct) {
+              damageEnemy(ct,0|(p.dmg*0.7));
+              for (let k=0;k<6;k++) addParticle(lerp(p.x,ct.x,Math.random()),lerp(p.y,ct.y,Math.random()),rand(-30,30),rand(-30,30),'#80DEEA',rand(2,4),rand(0.15,0.35));
+            }
+          }
+        }
+        hit=true; break;
+      }
+    }
+    if (hit) projectiles.splice(i,1);
+  }
+}
+
+function updateParticles(dt) {
+  for (let i=particles.length-1; i>=0; i--) {
+    const p=particles[i]; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=110*dt; p.life-=dt;
+    if (p.life<=0) particles.splice(i,1);
+  }
+}
+
+function updateFloatTexts(dt) {
+  for (let i=floatTexts.length-1; i>=0; i--) {
+    floatTexts[i].life-=dt;
+    if (floatTexts[i].life<=0) floatTexts.splice(i,1);
+  }
+}
+
+function updateCamera() {
+  camera.x=lerp(camera.x,clamp(player.x-CW/2,0,WW-CW),0.1);
+  camera.y=lerp(camera.y,clamp(player.y-CH/2,0,WH-CH),0.1);
+}
+
+function updateHUD() {
+  document.getElementById('stoneEl').textContent   = stone;
+  document.getElementById('ironEl').textContent    = iron;
+  document.getElementById('diamondEl').textContent = diamond;
+  document.getElementById('platinumEl').textContent= platinum;
+  document.getElementById('emeraldEl').textContent  = emerald;
+  document.getElementById('shopbtn').style.display  = (!shopMenuOpen && playerNearShop()) ? 'block' : 'none';
+  document.getElementById('baseHpEl').textContent  = base.hp;
+  document.getElementById('basefill').style.width  = (base.hp/base.maxHp*100)+'%';
+  document.getElementById('waveEl').textContent    = waveIdx;
+  document.getElementById('timerEl').textContent   = Math.ceil(Math.max(0,prepTime));
+  const inPrep=phase==='prep';
+  document.getElementById('phaseEl').textContent   = inPrep?'PREP PHASE':'WAVE '+waveIdx+' ACTIVE';
+  document.getElementById('phaseEl').style.color   = inPrep?'#FFD700':'#FF5252';
+  document.getElementById('wavetimer').style.display = inPrep?'block':'none';
+  document.getElementById('startbtn').style.display  = inPrep?'block':'none';
+  document.getElementById('craftbtn').style.display  = (!craftMenuOpen && playerNearBase()) ? 'block' : 'none';
+
+  // Update inventory slots
+  for (const type of Object.keys(inventory)) {
+    const n = inventory[type];
+    const slot = document.getElementById('inv-'+type);
+    const countEl = document.getElementById('count-'+type);
+    if (!slot || !countEl) continue;
+    countEl.textContent = n;
+    slot.classList.toggle('empty', n<=0 && selectedItem!==type);
+  }
+  // Keep selected slot highlighted — weapon modes take priority over mine slot
+  document.querySelectorAll('.inv-slot').forEach(s=>s.classList.remove('sel'));
+  if      (swordMode  && player.sword)         document.getElementById('inv-sword')?.classList.add('sel');
+  else if (rangedMode && player.rangedWeapon)  document.getElementById('inv-ranged')?.classList.add('sel');
+  else document.getElementById(selectedItem?'inv-'+selectedItem:'inv-none')?.classList.add('sel');
+
+  // Ranged weapon slot
+  const rangedSlot=document.getElementById('inv-ranged');
+  const rangedIcon=document.getElementById('ranged-icon');
+  const rangedLbl =document.getElementById('ranged-label');
+  const rangedAmmo=document.getElementById('ranged-ammo');
+  if (player.rangedWeapon) {
+    rangedSlot.style.display='flex';
+    rangedIcon.textContent = player.rangedWeapon==='crossbow'?'🔫':'🏹';
+    rangedLbl.textContent  = player.rangedWeapon==='crossbow'?'Crossbow':'Bow';
+    rangedAmmo.textContent = ammo[RTYPE[player.rangedWeapon].ammo];
+  } else {
+    rangedSlot.style.display='none';
+  }
+
+  // Sword slot
+  const swordSlot=document.getElementById('inv-sword');
+  const swordIcon=document.getElementById('sword-icon');
+  const swordLbl =document.getElementById('sword-label');
+  if (player.sword) {
+    swordSlot.style.display='flex';
+    swordIcon.textContent = player.sword==='diamond'?'💎':player.sword==='iron'?'🗡️':'⚔️';
+    swordLbl.textContent  = player.sword.charAt(0).toUpperCase()+player.sword.slice(1)+' Sword';
+  } else {
+    swordSlot.style.display='none';
+  }
+}
+
+// ============================================================
+// DAMAGE
+// ============================================================
+function damageEnemy(e,dmg) { e.hp-=dmg; e.hitFlash=0.12; }
+function damageTower(tower,dmg) {
+  tower.hp-=dmg;
+  if (tower.hp<=0) {
+    gridOccupied.delete(cellKey(tower.col,tower.row));
+    const idx=towers.indexOf(tower); if (idx>=0) towers.splice(idx,1);
+    for (let i=0;i<15;i++) addParticle(tower.x,tower.y,rand(-90,90),rand(-110,-10),BTYPE[tower.type].col,rand(4,9),rand(0.5,1.1));
+    screenShake=Math.min(screenShake+0.5,1.2);
+  }
+}
+function damageBase(dmg) {
+  base.hp=Math.max(0,base.hp-dmg);
+  screenShake=Math.min(screenShake+0.7,1.5);
+  if (base.hp<=0) { phase='gameover'; showOverlay('GAME OVER','Your base was destroyed!\nYou reached wave '+waveIdx+' of 8.'); }
+}
+
+// ============================================================
+// WAVE MANAGEMENT
+// ============================================================
+function startWave() {
+  if (phase!=='prep') return;
+  if (waveIdx>=WAVES.length) { phase='victory'; showOverlay('VICTORY!','You survived all 8 waves!'); return; }
+  phase='wave'; const waveDef=WAVES[waveIdx]; waveIdx++;
+  spawnQueue=[]; spawnTimer=0;
+  let time=0;
+  for (const group of waveDef) {
+    for (let i=0;i<group.n;i++) {
+      if (i>0) time+=group.gap;
+      spawnQueue.push({ type:group.t, sp:randInt(0,4), time });
+    }
+  }
+  spawnQueue.sort((a,b)=>a.time-b.time);
+  showWaveInfo('Wave '+waveIdx+' — '+waveDef.map(g=>g.n+' '+g.t+'s').join(', '));
+}
+
+function waveComplete() {
+  if (phase!=='wave') return;
+  if (waveIdx>=WAVES.length) { phase='victory'; showOverlay('VICTORY! 🎉','You survived all 8 waves!'); return; }
+  phase='prep'; prepTime=25;
+  const bonus=15+waveIdx*5; stone+=bonus;
+  showWaveInfo('Wave '+waveIdx+' complete! +'+bonus+'🪨  Return to base to craft more towers.');
+}
+
+function showWaveInfo(msg) {
+  const wi=document.getElementById('waveinfo'); wi.textContent=msg; wi.style.display='block';
+  setTimeout(()=>{ wi.style.display='none'; },4000);
+}
+function showOverlay(title,msg) {
+  document.getElementById('overlayTitle').textContent=title;
+  document.getElementById('overlayMsg').innerHTML=msg.replace(/\n/g,'<br>');
+  document.getElementById('overlay').style.display='flex';
+}
+function restartGame() {
+  document.getElementById('overlay').style.display='none';
+  closeCraftMenu(); closeShopMenu(); initState(); selectItem(null);
+  document.getElementById('homepage').style.display='flex';
+  document.getElementById('hud').style.display='none';
+  gameStarted = false;
+}
+
+// ============================================================
+// PLACEMENT
+// ============================================================
+function canPlace(type,col,row) {
+  if (!type) return false;
+  const maxCol=Math.floor(WW/GRID)-2, maxRow=Math.floor(WH/GRID)-2;
+  if (col<1||col>maxCol||row<1||row>maxRow) return false;
+  if (gridOccupied.has(cellKey(col,row))) return false;
+  const {x,y}=cellToWorld(col,row);
+  if (Math.abs(x-base.x)<base.w/2+GRID && Math.abs(y-base.y)<base.h/2+GRID) return false;
+  for (const r of rocks) if (r.hp>0&&hypot2(r.x-x,r.y-y)<r.r+GRID*0.5) return false;
+  return true;
+}
+
+function placeTower(type,col,row) {
+  if (!type || inventory[type]<=0) return;
+  if (!canPlace(type,col,row)) return;
+  const {x,y}=cellToWorld(col,row);
+  inventory[type]--;
+  gridOccupied.add(cellKey(col,row));
+  towers.push({ type, x, y, col, row, hp:BTYPE[type].hp, maxHp:BTYPE[type].hp, sz:BTYPE[type].sz, cooldown:0, angle:0 });
+  for (let i=0;i<10;i++) addParticle(x,y,rand(-60,60),rand(-90,-10),BTYPE[type].col,rand(3,7),rand(0.3,0.7));
+  if (inventory[type]<=0) selectItem(null);
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+canvas.width=CW; canvas.height=CH;
+
+function render() {
+  ctx.save();
+  if (screenShake>0) { const s=screenShake; ctx.translate(rand(-s*5,s*5),rand(-s*5,s*5)); }
+  ctx.translate(-Math.round(camera.x),-Math.round(camera.y));
+
+  ctx.fillStyle='#3b5c28'; ctx.fillRect(camera.x,camera.y,CW,CH);
+  ctx.strokeStyle='rgba(0,0,0,0.06)'; ctx.lineWidth=1;
+  const gx0=Math.floor(camera.x/GRID)*GRID, gy0=Math.floor(camera.y/GRID)*GRID;
+  for (let gx=gx0;gx<camera.x+CW;gx+=GRID){ctx.beginPath();ctx.moveTo(gx,camera.y);ctx.lineTo(gx,camera.y+CH);ctx.stroke();}
+  for (let gy=gy0;gy<camera.y+CH;gy+=GRID){ctx.beginPath();ctx.moveTo(camera.x,gy);ctx.lineTo(camera.x+CW,gy);ctx.stroke();}
+
+  for (const t of trees) {
+    ctx.fillStyle='#1a3a0a';ctx.beginPath();ctx.arc(t.x,t.y,t.r+2,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=t.col;ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,Math.PI*2);ctx.fill();
+  }
+  ctx.textAlign='center';
+  for (const sp of SPAWNS) {
+    ctx.fillStyle='rgba(200,50,50,0.18)';ctx.strokeStyle='rgba(220,60,60,0.5)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(sp.x,sp.y,55,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle='rgba(255,80,80,0.7)';ctx.font='bold 11px Segoe UI';ctx.fillText('SPAWN',sp.x,sp.y+4);
+  }
+  ctx.textAlign='left';
+
+  drawBaseInteractHint();
+  drawShopInteractHint();
+  drawRocks();
+  drawBase();
+  drawShop();
+  drawTowers();
+  drawEnemies();
+  drawProjectiles();
+  drawParticles();
+  drawPlayer();
+  drawSwordSwing();
+  if (selectedItem) drawPlacementGhost();
+  drawFloatTexts();
+
+  ctx.restore();
+  drawMinimap();
+}
+
+// Interaction ring + prompt around base
+function drawBaseInteractHint() {
+  const near=playerNearBase();
+  if (!near) return;
+  const pulse=0.5+0.5*Math.sin(Date.now()*0.003);
+  ctx.strokeStyle=`rgba(255,220,80,${0.25+0.25*pulse})`;
+  ctx.lineWidth=2; ctx.setLineDash([8,8]);
+  ctx.beginPath();ctx.arc(base.x,base.y,55,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,220,80,0.88)';
+  ctx.font='bold 12px Segoe UI'; ctx.textAlign='center';
+  ctx.fillText('Click to craft',base.x,base.y-52);
+  ctx.textAlign='left';
+}
+
+function drawRocks() {
+  for (const r of rocks) {
+    if (r.hp<=0) continue;
+    const alpha=r.hp/r.maxHp;
+    ctx.fillStyle='rgba(0,0,0,0.28)';ctx.beginPath();ctx.ellipse(r.x+4,r.y+7,r.r*0.9,r.r*0.45,0,0,Math.PI*2);ctx.fill();
+    let colBase,colHL,labelCol,label;
+    if (r.kind==='iron') {
+      const v=0|(140+40*alpha); colBase=`rgb(${v},${0|(v*0.55)},${0|(v*0.2)})`;
+      colHL='rgba(255,160,0,0.18)';labelCol='#FF8F00';label='Fe';
+    } else if (r.kind==='diamond') {
+      const v=0|(60+80*alpha); colBase=`rgb(${v},${0|(v*1.5+40)},${0|(v*2+60)})`;
+      colHL='rgba(64,196,255,0.3)';labelCol='#40C4FF';label='◆';
+    } else if (r.kind==='platinum') {
+      const v=0|(100+80*alpha); colBase=`rgb(${v+70},${v+72},${v+78})`;
+      colHL='rgba(255,255,255,0.5)';labelCol='#ECEFF1';label='Pt';
+    } else {
+      const l=0|(80+40*alpha); colBase=`rgb(${l},${l},${l+10})`;
+      colHL='rgba(255,255,255,0.13)';labelCol='#9E9E9E';label=null;
+    }
+    ctx.fillStyle=colBase;ctx.beginPath();
+    for (let i=0;i<8;i++) {
+      const a=(i/8)*Math.PI*2,v=0.72+0.35*Math.sin(r.seed*123.4+i*7.3);
+      const rx=r.x+Math.cos(a)*r.r*v,ry=r.y+Math.sin(a)*r.r*v*0.72;
+      i===0?ctx.moveTo(rx,ry):ctx.lineTo(rx,ry);
+    }
+    ctx.closePath();ctx.fill();
+    if (r.kind==='iron') {
+      ctx.strokeStyle='rgba(255,140,0,0.35)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(r.x-r.r*0.3,r.y-r.r*0.2);ctx.lineTo(r.x+r.r*0.2,r.y+r.r*0.3);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(r.x+r.r*0.1,r.y-r.r*0.35);ctx.lineTo(r.x-r.r*0.15,r.y+r.r*0.2);ctx.stroke();
+    } else if (r.kind==='diamond') {
+      ctx.fillStyle=`rgba(64,196,255,${0.4*alpha})`;
+      for (let i=0;i<3;i++){const a=r.seed*10+i*2.1,rd=r.r*0.35;ctx.beginPath();ctx.arc(r.x+Math.cos(a)*rd,r.y+Math.sin(a)*rd*0.7,2.5,0,Math.PI*2);ctx.fill();}
+    } else if (r.kind==='platinum') {
+      ctx.strokeStyle='rgba(220,230,255,0.55)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(r.x-r.r*0.28,r.y-r.r*0.2);ctx.lineTo(r.x+r.r*0.25,r.y+r.r*0.28);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(r.x+r.r*0.1,r.y-r.r*0.32);ctx.lineTo(r.x-r.r*0.2,r.y+r.r*0.18);ctx.stroke();
+      ctx.fillStyle=`rgba(255,255,255,${0.4*alpha})`;
+      for(let i=0;i<2;i++){const a=r.seed*8+i*1.9,rd=r.r*0.3;ctx.beginPath();ctx.arc(r.x+Math.cos(a)*rd,r.y+Math.sin(a)*rd*0.7,2,0,Math.PI*2);ctx.fill();}
+    }
+    ctx.fillStyle=colHL;ctx.beginPath();ctx.arc(r.x-r.r*0.22,r.y-r.r*0.22,r.r*0.28,0,Math.PI*2);ctx.fill();
+    if (label) {
+      ctx.fillStyle=labelCol;ctx.font=`bold ${0|(r.r*0.7)}px Segoe UI`;ctx.textAlign='center';
+      ctx.fillText(label,r.x,r.y+r.r*0.25);ctx.textAlign='left';
+    }
+    if (player.mineTarget===r&&player.mineTimer>0) {
+      const mineTime = MINE_TIMES[r.kind]||0.65;
+      const bw=r.r*2.6,bh=5,bx=r.x-bw/2,by2=r.y-r.r-16;
+      ctx.fillStyle='#111';ctx.fillRect(bx,by2,bw,bh);
+      ctx.fillStyle=r.kind==='iron'?'#FF8F00':r.kind==='diamond'?'#40C4FF':r.kind==='platinum'?'#ECEFF1':'#4DD0E1';
+      ctx.fillRect(bx,by2,bw*(player.mineTimer/mineTime),bh);
+    }
+    // Lock icon on diamond if player lacks iron pickaxe
+    if (r.kind==='diamond' && player.pickaxe!=='iron' && player.pickaxe!=='diamond') {
+      ctx.fillStyle='rgba(0,0,0,0.55)';
+      ctx.beginPath();
+      for (let i=0;i<8;i++){const a=(i/8)*Math.PI*2,v=0.72+0.35*Math.sin(r.seed*123.4+i*7.3);const rx=r.x+Math.cos(a)*r.r*v,ry=r.y+Math.sin(a)*r.r*v*0.72;i===0?ctx.moveTo(rx,ry):ctx.lineTo(rx,ry);}
+      ctx.closePath();ctx.fill();
+      ctx.font=`${0|(r.r)}px Segoe UI`;ctx.textAlign='center';
+      ctx.fillText('🔒',r.x,r.y+r.r*0.35);ctx.textAlign='left';
+    }
+    // Lock icon on platinum if player lacks diamond pickaxe
+    if (r.kind==='platinum' && player.pickaxe!=='diamond') {
+      ctx.fillStyle='rgba(0,0,0,0.55)';
+      ctx.beginPath();
+      for (let i=0;i<8;i++){const a=(i/8)*Math.PI*2,v=0.72+0.35*Math.sin(r.seed*123.4+i*7.3);const rx=r.x+Math.cos(a)*r.r*v,ry=r.y+Math.sin(a)*r.r*v*0.72;i===0?ctx.moveTo(rx,ry):ctx.lineTo(rx,ry);}
+      ctx.closePath();ctx.fill();
+      ctx.font=`${0|(r.r)}px Segoe UI`;ctx.textAlign='center';
+      ctx.fillText('🔒',r.x,r.y+r.r*0.35);ctx.textAlign='left';
+    }
+    for (let i=0;i<r.maxHp;i++) {
+      ctx.fillStyle=i<r.hp?(r.kind==='iron'?'#FF8F00':r.kind==='diamond'?'#40C4FF':'#4DD0E1'):'#333';
+      ctx.beginPath();ctx.arc(r.x-(r.maxHp-1)*7+i*14,r.y-r.r-6,3.5,0,Math.PI*2);ctx.fill();
+    }
+  }
+}
+
+function drawBase() {
+  const {x,y,w,h,hp,maxHp}=base;
+  const hr=hp/maxHp;
+  ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(x-w/2+6,y-h/2+8,w,h);
+  ctx.fillStyle=hr>0.5?'#6D4C41':hr>0.25?'#A0522D':'#8B1A1A';ctx.fillRect(x-w/2,y-h/2,w,h);
+  ctx.fillStyle='#4E342E';for(let i=0;i<4;i++)ctx.fillRect(x-w/2+i*(w/4),y-h/2-10,w/4-4,12);
+  ctx.strokeStyle='#3E2723';ctx.lineWidth=2;ctx.strokeRect(x-w/2,y-h/2,w,h);
+  ctx.fillStyle='#3E2723';ctx.fillRect(x-13,y+h/2-28,26,28);
+  ctx.fillStyle='#2E1503';ctx.beginPath();ctx.arc(x,y+h/2-28,13,Math.PI,0);ctx.fill();
+  ctx.strokeStyle='#5D4037';ctx.lineWidth=2;
+  for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(x+i*6,y+h/2-28);ctx.lineTo(x+i*6,y+h/2-2);ctx.stroke();}
+  ctx.strokeStyle='#888';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y-h/2-10);ctx.lineTo(x,y-h/2-38);ctx.stroke();
+  ctx.fillStyle=hr>0.3?'#E53935':'#555';ctx.beginPath();ctx.moveTo(x,y-h/2-38);ctx.lineTo(x+20,y-h/2-30);ctx.lineTo(x,y-h/2-22);ctx.fill();
+  const bw=94,bh=8,bx=x-bw/2,by2=y-h/2-22;
+  ctx.fillStyle='#1a1a1a';ctx.fillRect(bx,by2,bw,bh);
+  ctx.fillStyle=hr>0.5?'#4CAF50':hr>0.25?'#FFC107':'#F44336';ctx.fillRect(bx,by2,bw*hr,bh);
+  ctx.strokeStyle='#444';ctx.lineWidth=1;ctx.strokeRect(bx,by2,bw,bh);
+  ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='bold 11px Segoe UI';ctx.textAlign='center';
+  ctx.fillText('BASE',x,y+4);ctx.textAlign='left';
+}
+
+function drawTowers() {
+  for (const t of towers) {
+    const bt=BTYPE[t.type];const sz=t.sz;const hr=t.hp/bt.hp;
+    if (t.type==='wall'||t.type==='iwall') {
+      const gx=t.col*GRID, gy=t.row*GRID;
+      // shadow
+      ctx.fillStyle='rgba(0,0,0,0.28)';ctx.fillRect(gx+5,gy+7,GRID,GRID);
+      // main face
+      ctx.fillStyle=bt.col;ctx.fillRect(gx,gy,GRID,GRID);
+      // border
+      ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=2;ctx.strokeRect(gx,gy,GRID,GRID);
+      if (t.type==='iwall') {
+        // iron plating: dark horizontal bands + rivets
+        ctx.fillStyle='rgba(0,0,0,0.18)';
+        ctx.fillRect(gx,gy+GRID*0.33,GRID,4);
+        ctx.fillRect(gx,gy+GRID*0.66,GRID,4);
+        ctx.fillStyle='rgba(255,255,255,0.2)';
+        for (const [rx,ry] of [[0.15,0.15],[0.85,0.15],[0.15,0.85],[0.85,0.85],[0.5,0.5]]) {
+          ctx.beginPath();ctx.arc(gx+rx*GRID,gy+ry*GRID,3,0,Math.PI*2);ctx.fill();
+        }
+      } else {
+        // stone mortar lines
+        ctx.strokeStyle='rgba(0,0,0,0.22)';ctx.lineWidth=1.5;
+        ctx.beginPath();
+        ctx.moveTo(gx,gy+GRID/2);ctx.lineTo(gx+GRID,gy+GRID/2);
+        ctx.moveTo(gx+GRID/2,gy);ctx.lineTo(gx+GRID/2,gy+GRID/2);
+        ctx.moveTo(gx+GRID/4,gy+GRID/2);ctx.lineTo(gx+GRID/4,gy+GRID);
+        ctx.moveTo(gx+GRID*3/4,gy+GRID/2);ctx.lineTo(gx+GRID*3/4,gy+GRID);
+        ctx.stroke();
+      }
+      // HP bar above cell
+      if (t.hp<bt.hp){
+        const bw=GRID-4,bh=4,bxw=gx+2,by2=gy-8;
+        ctx.fillStyle='#111';ctx.fillRect(bxw,by2,bw,bh);
+        ctx.fillStyle=hr>0.5?'#4CAF50':'#F44336';ctx.fillRect(bxw,by2,bw*hr,bh);
+      }
+    } else {
+      ctx.fillStyle='rgba(0,0,0,0.3)';ctx.beginPath();ctx.ellipse(t.x+3,t.y+5,sz*0.9,sz*0.45,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#4E342E';ctx.beginPath();ctx.arc(t.x,t.y,sz+4,0,Math.PI*2);ctx.fill();
+      if (t.type==='crystal'){ctx.fillStyle='rgba(0,188,212,0.18)';ctx.beginPath();ctx.arc(t.x,t.y,sz+8,0,Math.PI*2);ctx.fill();}
+      ctx.fillStyle=bt.col;ctx.beginPath();ctx.arc(t.x,t.y,sz,0,Math.PI*2);ctx.fill();
+      const ang=t.angle||0;
+      ctx.strokeStyle='#222';ctx.lineWidth=sz*0.38;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(t.x,t.y);ctx.lineTo(t.x+Math.cos(ang)*sz*1.7,t.y+Math.sin(ang)*sz*1.7);ctx.stroke();
+      ctx.fillStyle='rgba(255,255,255,0.18)';ctx.beginPath();ctx.arc(t.x,t.y,sz*0.38,0,Math.PI*2);ctx.fill();
+      if (t.hp<bt.hp){
+        const bw=sz*2.6,bh=4,bxw=t.x-bw/2,by2=t.y-sz-11;
+        ctx.fillStyle='#111';ctx.fillRect(bxw,by2,bw,bh);
+        ctx.fillStyle=hr>0.5?'#4CAF50':'#F44336';ctx.fillRect(bxw,by2,bw*hr,bh);
+      }
+      if (bt.range>0&&hypot2(mouse.wx-t.x,mouse.wy-t.y)<sz+14){
+        ctx.strokeStyle='rgba(255,255,255,0.14)';ctx.lineWidth=1;ctx.setLineDash([6,6]);
+        ctx.beginPath();ctx.arc(t.x,t.y,bt.range,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+      }
+    }
+  }
+}
+
+function drawEnemies() {
+  for (const e of enemies) {
+    const flash=e.hitFlash>0;
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.beginPath();ctx.ellipse(e.x+2,e.y+4,e.sz*0.9,e.sz*0.4,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=flash?'#fff':e.col;ctx.beginPath();ctx.arc(e.x,e.y,e.sz,0,Math.PI*2);ctx.fill();
+    if (!flash) {
+      const eo=e.sz*0.3;
+      ctx.fillStyle='#000';
+      ctx.beginPath();ctx.arc(e.x-eo*0.6,e.y-eo*0.3,e.sz*0.19,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(e.x+eo*0.6,e.y-eo*0.3,e.sz*0.19,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#000';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(e.x-eo*0.9,e.y-eo*0.6);ctx.lineTo(e.x-eo*0.2,e.y-eo*0.45);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(e.x+eo*0.2,e.y-eo*0.45);ctx.lineTo(e.x+eo*0.9,e.y-eo*0.6);ctx.stroke();
+    }
+    const hr=e.hp/e.maxHp,bw=e.sz*2.6,bh=3.5,bx=e.x-bw/2,by2=e.y-e.sz-9;
+    ctx.fillStyle='#111';ctx.fillRect(bx,by2,bw,bh);
+    ctx.fillStyle=hr>0.5?'#4CAF50':'#F44336';ctx.fillRect(bx,by2,bw*hr,bh);
+    if (e.type==='troll'){ctx.fillStyle='rgba(206,147,216,0.9)';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';ctx.fillText('TROLL',e.x,e.y-e.sz-12);ctx.textAlign='left';}
+    if (e.type==='boss'){ctx.fillStyle='#FF1744';ctx.font='bold 13px Segoe UI';ctx.textAlign='center';ctx.fillText('👑 BOSS',e.x,e.y-e.sz-14);ctx.textAlign='left';}
+  }
+}
+
+function drawProjectiles() {
+  for (const p of projectiles) {
+    if (p.aoe>0){ctx.fillStyle='rgba(255,140,0,0.25)';ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,p.aoe>0?6:3.5,0,Math.PI*2);ctx.fill();
+    if (p.chain){ctx.fillStyle='rgba(128,222,234,0.5)';ctx.beginPath();ctx.arc(p.x,p.y,6,0,Math.PI*2);ctx.fill();}
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const a=p.life/p.maxLife;ctx.globalAlpha=a;
+    ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,p.sz*a*0.8+0.5,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawPlayer() {
+  const {x,y,angle}=player;
+  ctx.fillStyle='rgba(0,0,0,0.32)';ctx.beginPath();ctx.ellipse(x+3,y+7,12,5.5,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#1565C0';ctx.beginPath();ctx.arc(x,y,12,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#1976D2';ctx.beginPath();ctx.arc(x-2,y-2,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#FFCCBC';ctx.beginPath();ctx.arc(x,y-9,7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#5D4037';ctx.beginPath();ctx.arc(x,y-12,5,Math.PI,0);ctx.fill();
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+  if (selectedItem) {
+    // Holding a tower (blueprint)
+    const col=BTYPE[selectedItem].col;
+    ctx.fillStyle=col;ctx.globalAlpha=0.9;
+    ctx.beginPath();ctx.arc(20,0,9,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(20,0,9,0,Math.PI*2);ctx.stroke();
+  } else if (rangedMode && player.rangedWeapon) {
+    const rt=RTYPE[player.rangedWeapon]; const rc=rt.col;
+    if (player.rangedWeapon==='crossbow') {
+      ctx.strokeStyle=rc;ctx.lineWidth=4;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(30,0);ctx.stroke();
+      ctx.strokeStyle='#8D6E63';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(20,-10);ctx.lineTo(20,10);ctx.stroke();
+      ctx.strokeStyle='#888';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(20,-10);ctx.lineTo(32,0);ctx.moveTo(20,10);ctx.lineTo(32,0);ctx.stroke();
+    } else {
+      ctx.strokeStyle='#8D6E63';ctx.lineWidth=3;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(16,-10);ctx.lineTo(16,10);ctx.stroke();
+      ctx.strokeStyle='#ccc';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(16,-10);ctx.lineTo(28,0);ctx.moveTo(16,10);ctx.lineTo(28,0);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(30,0);ctx.stroke();
+    }
+    if (player.rangedTimer>0) {
+      const pct=1-player.rangedTimer/RTYPE[player.rangedWeapon].cd;
+      ctx.strokeStyle=`rgba(255,215,64,${0.25*pct})`;ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(0,0,RTYPE[player.rangedWeapon].range,0,Math.PI*2);ctx.stroke();
+    }
+  } else if (swordMode && player.sword) {
+    // Sword
+    const sc=STYPE[player.sword].col;
+    const swingOff = player.swingAnim>0 ? Math.sin(player.swingAnim*Math.PI)*18 : 0;
+    ctx.save(); ctx.rotate(swingOff*0.04);
+    ctx.strokeStyle='#5D4037';ctx.lineWidth=3;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(26,0);ctx.stroke();
+    ctx.fillStyle='#9E9E9E';ctx.fillRect(21,-6,5,12); // guard
+    ctx.fillStyle=sc;
+    ctx.beginPath();ctx.moveTo(25,-4);ctx.lineTo(40,0);ctx.lineTo(25,4);ctx.closePath();ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.4)';
+    ctx.beginPath();ctx.moveTo(27,-2);ctx.lineTo(38,0);ctx.lineTo(34,0);ctx.closePath();ctx.fill();
+    if (player.swordTimer>0){
+      const pct=1-player.swordTimer/STYPE[player.sword].cd;
+      ctx.strokeStyle=`rgba(255,255,255,${0.3*pct})`;ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(0,0,STYPE[player.sword].range,0,Math.PI*2);ctx.stroke();
+    }
+    ctx.restore();
+  } else {
+    const isDiamondPick = player.pickaxe === 'diamond';
+    const isIronPick    = player.pickaxe === 'iron' || isDiamondPick;
+    ctx.strokeStyle='#8D6E63';ctx.lineWidth=3;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(24,0);ctx.stroke();
+    ctx.fillStyle=isDiamondPick?'#40C4FF':isIronPick?'#FF8F00':'#90A4AE';
+    ctx.beginPath();ctx.moveTo(22,-6);ctx.lineTo(32,-2);ctx.lineTo(32,2);ctx.lineTo(22,6);ctx.closePath();ctx.fill();
+    if (isIronPick) {
+      ctx.fillStyle='rgba(255,200,100,0.4)';
+      ctx.beginPath();ctx.moveTo(24,-4);ctx.lineTo(30,-1);ctx.lineTo(28,0);ctx.lineTo(24,-1);ctx.closePath();ctx.fill();
+    }
+    if (player.mineTarget&&player.mineTimer>0){ctx.fillStyle='rgba(255,255,200,0.7)';ctx.beginPath();ctx.arc(32,0,3,0,Math.PI*2);ctx.fill();}
+  }
+  ctx.restore();
+  if (player.mineTarget) {
+    const r=player.mineTarget;
+    ctx.strokeStyle=r.kind==='iron'?'rgba(255,143,0,0.5)':r.kind==='diamond'?'rgba(64,196,255,0.5)':'rgba(77,208,225,0.5)';
+    ctx.lineWidth=1.5;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.arc(r.x,r.y,r.r+14,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  }
+}
+
+function drawPlacementGhost() {
+  const bt=BTYPE[selectedItem];
+  const {col,row}=worldToCell(mouse.wx,mouse.wy);
+  const {x:cx,y:cy}=cellToWorld(col,row);
+  const validLoc=canPlace(selectedItem,col,row);
+  const hasItem=inventory[selectedItem]>0;
+  const ok=validLoc&&hasItem;
+  // Filled cell
+  ctx.globalAlpha=0.38;
+  ctx.fillStyle=ok?bt.col:'#FF1744';
+  ctx.fillRect(col*GRID,row*GRID,GRID,GRID);
+  ctx.globalAlpha=1;
+  // Cell border
+  ctx.strokeStyle=ok?'rgba(255,255,255,0.7)':'rgba(255,60,60,0.9)';
+  ctx.lineWidth=2;ctx.setLineDash([4,4]);
+  ctx.strokeRect(col*GRID+1,row*GRID+1,GRID-2,GRID-2);
+  ctx.setLineDash([]);
+  // Range ring
+  if (bt.range>0){
+    ctx.strokeStyle=ok?'rgba(255,255,255,0.22)':'rgba(255,80,80,0.3)';
+    ctx.lineWidth=1;ctx.setLineDash([5,5]);
+    ctx.beginPath();ctx.arc(cx,cy,bt.range,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  }
+  // Label
+  ctx.font='bold 12px Segoe UI';ctx.textAlign='left';
+  ctx.fillStyle=ok?'#A5D6A7':'#EF9A9A';
+  ctx.fillText((ok?'✓ ':'✗ ')+'x'+inventory[selectedItem]+' '+bt.name,col*GRID+GRID+8,cy-2);
+  if (!validLoc&&hasItem){
+    ctx.fillStyle='rgba(255,100,100,0.9)';ctx.font='11px Segoe UI';
+    ctx.fillText('Cannot place here',col*GRID+GRID+8,cy+14);
+  }
+}
+
+function drawShop() {
+  const {x,y,w,h}=SHOP;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(x-w/2+6,y-h/2+8,w,h);
+  // awning
+  ctx.fillStyle='#B71C1C';ctx.fillRect(x-w/2-8,y-h/2-14,w+16,18);
+  ctx.fillStyle='#E53935';
+  for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(x-w/2-8+i*(w+16)/5,y-h/2+4);ctx.lineTo(x-w/2-8+(i+0.5)*(w+16)/5,y-h/2-14);ctx.lineTo(x-w/2-8+(i+1)*(w+16)/5,y-h/2+4);ctx.closePath();ctx.fill();}
+  // walls
+  ctx.fillStyle='#EFEBE9';ctx.fillRect(x-w/2,y-h/2,w,h);
+  ctx.strokeStyle='#BCAAA4';ctx.lineWidth=2;ctx.strokeRect(x-w/2,y-h/2,w,h);
+  // door
+  ctx.fillStyle='#8D6E63';ctx.fillRect(x-12,y+h/2-28,24,28);
+  ctx.fillStyle='#6D4C41';ctx.beginPath();ctx.arc(x,y+h/2-28,12,Math.PI,0);ctx.fill();
+  ctx.fillStyle='#FFD700';ctx.beginPath();ctx.arc(x+6,y+h/2-14,2.5,0,Math.PI*2);ctx.fill();
+  // sign
+  ctx.fillStyle='#FFF9C4';ctx.fillRect(x-22,y-h/2+8,44,18);
+  ctx.strokeStyle='#F9A825';ctx.lineWidth=1;ctx.strokeRect(x-22,y-h/2+8,44,18);
+  ctx.fillStyle='#333';ctx.font='bold 9px Segoe UI';ctx.textAlign='center';
+  ctx.fillText('SHOP',x,y-h/2+20);
+  // NPC
+  ctx.fillStyle='#FFCCBC';ctx.beginPath();ctx.arc(x,y-4,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#4A148C';ctx.beginPath();ctx.arc(x,y-8,6,Math.PI,0);ctx.fill();
+  ctx.textAlign='left';
+}
+
+function drawShopInteractHint() {
+  if (!playerNearShop()) return;
+  const pulse=0.5+0.5*Math.sin(Date.now()*0.003);
+  ctx.strokeStyle=`rgba(105,240,174,${0.3+0.25*pulse})`;
+  ctx.lineWidth=2;ctx.setLineDash([8,8]);
+  ctx.beginPath();ctx.arc(SHOP.x,SHOP.y,60,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(105,240,174,0.9)';
+  ctx.font='bold 12px Segoe UI';ctx.textAlign='center';
+  ctx.fillText('Press F to shop',SHOP.x,SHOP.y-58);
+  ctx.textAlign='left';
+}
+
+function drawSwordSwing() {
+  if (player.swingAnim <= 0 || !player.sword) return;
+  const st=STYPE[player.sword];
+  const a=player.swingAngle, sweep=Math.PI*0.85, al=player.swingAnim;
+  const rgb=st.col==='#40C4FF'?'64,196,255':st.col==='#90CAF9'?'144,202,249':'176,190,197';
+  ctx.save();ctx.translate(player.x,player.y);
+  // Filled arc
+  ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,st.range,a-sweep/2,a+sweep/2);ctx.closePath();
+  ctx.fillStyle=`rgba(${rgb},${0.28*al})`;ctx.fill();
+  // Arc edge
+  ctx.beginPath();ctx.arc(0,0,st.range,a-sweep/2,a+sweep/2);
+  ctx.strokeStyle=`rgba(${rgb},${0.7*al})`;ctx.lineWidth=2.5;ctx.stroke();
+  ctx.restore();
+}
+
+function drawFloatTexts() {
+  ctx.font = 'bold 13px Segoe UI';
+  ctx.textAlign = 'center';
+  for (const f of floatTexts) {
+    const a = Math.min(1, f.life / f.maxLife * 2); // fade in fast, fade out slowly
+    const rise = (1 - f.life / f.maxLife) * 38;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#000';
+    ctx.fillText(f.text, f.x+1, f.y - rise + 1);
+    ctx.fillStyle = f.col;
+    ctx.fillText(f.text, f.x, f.y - rise);
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
+}
+
+function drawMinimap() {
+  const mw=164,mh=122,mx=CW-mw-10,my=10;
+  const sx=mw/WW,sy=mh/WH;
+  ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(mx,my,mw,mh);
+  ctx.fillStyle='rgba(59,92,40,0.4)';ctx.fillRect(mx,my,mw,mh);
+  ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.strokeRect(mx,my,mw,mh);
+  ctx.strokeStyle='rgba(255,255,255,0.28)';ctx.strokeRect(mx+camera.x*sx,my+camera.y*sy,CW*sx,CH*sy);
+  for (const r of rocks) {
+    if (r.hp<=0) continue;
+    ctx.fillStyle=r.kind==='iron'?'#FF8F00':r.kind==='diamond'?'#40C4FF':r.kind==='platinum'?'#ECEFF1':'#78909C';
+    ctx.fillRect(mx+r.x*sx-1,my+r.y*sy-1,2,2);
+  }
+  for (const t of towers){ctx.fillStyle=BTYPE[t.type].col;ctx.fillRect(mx+t.x*sx-2,my+t.y*sy-2,4,4);}
+  ctx.fillStyle='#EF5350';for (const e of enemies) ctx.fillRect(mx+e.x*sx-1,my+e.y*sy-1,2.5,2.5);
+  ctx.fillStyle='#8D6E63';ctx.fillRect(mx+base.x*sx-4,my+base.y*sy-4,8,8);
+  ctx.fillStyle='#42A5F5';ctx.beginPath();ctx.arc(mx+player.x*sx,my+player.y*sy,3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='9px Segoe UI';ctx.fillText('MAP',mx+4,my+11);
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+// Track mouse in world coords at all times (window-level so HUD elements don't block it)
+window.addEventListener('mousemove',ev=>{
+  const r=canvas.getBoundingClientRect();
+  mouse.wx=ev.clientX-r.left+camera.x; mouse.wy=ev.clientY-r.top+camera.y;
+});
+
+canvas.addEventListener('mousedown',ev=>{
+  if (ev.button!==0||craftMenuOpen) return;
+  mouse.down=true;
+  // Recalculate world pos from this exact event (avoids stale coords)
+  const r=canvas.getBoundingClientRect();
+  const wx=ev.clientX-r.left+camera.x, wy=ev.clientY-r.top+camera.y;
+  mouse.wx=wx; mouse.wy=wy;
+  // Place tower from inventory (snap to grid)
+  if (selectedItem && inventory[selectedItem]>0) {
+    const {col,row}=worldToCell(wx,wy);
+    placeTower(selectedItem, col, row);
+  }
+  // else: mining handled by updateMining
+});
+
+canvas.addEventListener('mouseup',ev=>{ if(ev.button===0) mouse.down=false; });
+canvas.addEventListener('contextmenu',ev=>{ ev.preventDefault(); selectItem(null); });
+
+window.addEventListener('keydown',ev=>{
+  keys[ev.code]=true;
+  if (ev.code==='KeyE'||ev.code==='Escape') { closeCraftMenu(); closeShopMenu(); selectItem(null); swordMode=false; rangedMode=false; updateHUD(); }
+  if (ev.code==='KeyQ') toggleSwordMode();
+  if (ev.code==='KeyR') toggleRangedMode();
+  if (ev.code==='Digit1') selectItem('arrow');
+  if (ev.code==='Digit2') selectItem('cannon');
+  if (ev.code==='Digit3') selectItem('wall');
+  if (ev.code==='Digit4') selectItem('sniper');
+  if (ev.code==='Digit5') selectItem('crystal');
+  if (ev.code==='Space') { ev.preventDefault(); startWave(); }
+  if (ev.code==='KeyF') {
+    if (craftMenuOpen) closeCraftMenu();
+    else if (shopMenuOpen) closeShopMenu();
+    else if (playerNearShop()) openShopMenu();
+    else if (playerNearBase()) openCraftMenu();
+  }
+});
+window.addEventListener('keyup',ev=>{ keys[ev.code]=false; });
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+function loop(ts) {
+  const dt=Math.min((ts-lastTime)/1000,0.05);
+  lastTime=ts; update(dt); render();
+  requestAnimationFrame(loop);
+}
+
+initState();
+selectItem(null);
+let gameStarted = false;
+function startGame() {
+  if (gameStarted) return;
+  gameStarted = true;
+  document.getElementById('homepage').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  requestAnimationFrame(ts=>{ lastTime=ts; requestAnimationFrame(loop); });
+}
+</script>
+</body>
+</html>
