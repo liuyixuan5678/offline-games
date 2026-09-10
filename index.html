@@ -27,12 +27,25 @@ p.sub{
     margin-bottom:36px;
     text-align:center;
 }
+.section{
+    width:100%;
+    max-width:900px;
+    margin-bottom:40px;
+}
+.section-label{
+    font-size:1.1rem;
+    font-weight:bold;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    opacity:.75;
+    margin-bottom:14px;
+    padding-bottom:8px;
+    border-bottom:1px solid rgba(255,255,255,.25);
+}
 .grid{
     display:grid;
     grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
     gap:20px;
-    width:100%;
-    max-width:900px;
 }
 a.card{
     display:flex;
@@ -52,6 +65,10 @@ a.card:hover{
     transform:translateY(-4px);
     background:rgba(255,255,255,.22);
 }
+a.card.featured{
+    background:rgba(255,255,255,.2);
+    border-color:rgba(255,255,255,.4);
+}
 .icon{font-size:3rem;margin-bottom:12px}
 .name{font-size:1.25rem;font-weight:bold}
 </style>
@@ -59,47 +76,70 @@ a.card:hover{
 <body>
 <h1>Offline Games</h1>
 <p class="sub">Pick a game to play</p>
-<div class="grid">
-    <a class="card" href="driving-game.html">
-        <span class="icon">🏎️</span>
-        <span class="name">Driving Game</span>
-    </a>
-    <a class="card" href="snake.html">
-        <span class="icon">🐍</span>
-        <span class="name">Snake</span>
-    </a>
-    <a class="card" href="tetris.html">
-        <span class="icon">🧱</span>
-        <span class="name">Tetris</span>
-    </a>
-    <a class="card" href="spades.html">
-        <span class="icon">♠️</span>
-        <span class="name">Spades</span>
-    </a>
-    <a class="card" href="hongshi.html">
-        <span class="icon">🃏</span>
-        <span class="name">红十</span>
-    </a>
-    <a class="card" href="archery-2d/index.html">
-        <span class="icon">🏹</span>
-        <span class="name">Archery 2D</span>
-    </a>
-    <a class="card" href="archery-3d/index.html">
-        <span class="icon">🎯</span>
-        <span class="name">Archery 3D</span>
-    </a>
-    <a class="card" href="survival/index.html">
-        <span class="icon">⚔️</span>
-        <span class="name">Survival</span>
-    </a>
-    <a class="card" href="tower-defence/index.html">
-        <span class="icon">🏰</span>
-        <span class="name">Tower Defence</span>
-    </a>
-    <a class="card" href="realistic-survival/index.html">
-        <span class="icon">⚔️</span>
-        <span class="name">Realistic Survival</span>
-    </a>
+
+<div class="section">
+    <div class="section-label">Top Games</div>
+    <div class="grid">
+        <a class="card featured" href="tower-defense/index.html">
+            <span class="icon">🏰</span>
+            <span class="name">Tower Defense</span>
+        </a>
+        <a class="card featured" href="survival/index.html">
+            <span class="icon">⚔️</span>
+            <span class="name">Survival</span>
+        </a>
+        <a class="card featured" href="realistic-survival/index.html">
+            <span class="icon">⚔️</span>
+            <span class="name">Realistic Survival</span>
+        </a>
+    </div>
 </div>
+
+<div class="section">
+    <div class="section-label">All Games</div>
+    <div class="grid">
+        <a class="card" href="driving-game.html">
+            <span class="icon">🏎️</span>
+            <span class="name">Driving Game</span>
+        </a>
+        <a class="card" href="snake.html">
+            <span class="icon">🐍</span>
+            <span class="name">Snake</span>
+        </a>
+        <a class="card" href="tetris.html">
+            <span class="icon">🧱</span>
+            <span class="name">Tetris</span>
+        </a>
+        <a class="card" href="spades.html">
+            <span class="icon">♠️</span>
+            <span class="name">Spades</span>
+        </a>
+        <a class="card" href="hongshi.html">
+            <span class="icon">🃏</span>
+            <span class="name">红十</span>
+        </a>
+        <a class="card" href="archery-2d/index.html">
+            <span class="icon">🏹</span>
+            <span class="name">Archery 2D</span>
+        </a>
+        <a class="card" href="archery-3d/index.html">
+            <span class="icon">🎯</span>
+            <span class="name">Archery 3D</span>
+        </a>
+        <a class="card" href="tower-defense/index.html">
+            <span class="icon">🏰</span>
+            <span class="name">Tower Defense</span>
+        </a>
+        <a class="card" href="survival/index.html">
+            <span class="icon">⚔️</span>
+            <span class="name">Survival</span>
+        </a>
+        <a class="card" href="realistic-survival/index.html">
+            <span class="icon">⚔️</span>
+            <span class="name">Realistic Survival</span>
+        </a>
+    </div>
+</div>
+
 </body>
 </html>
